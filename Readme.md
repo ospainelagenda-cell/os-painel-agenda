@@ -87,3 +87,31 @@ Preferred communication style: Simple, everyday language.
 
 * **connect-pg-simple**: PostgreSQL session store for Express
 * **drizzle-kit**: Database migration and schema management tool
+
+## Recent Changes
+
+### September 20, 2025 - Replit Environment Setup
+* Successfully imported GitHub project into Replit environment
+* Set up PostgreSQL database with Drizzle ORM schema migrations
+* Configured Vite development server for Replit proxy compatibility (host: 0.0.0.0:5000)
+* Fixed React infinite loop issue in SearchActions component useEffect dependency
+* Established development workflow running on port 5000 with proper backend/frontend separation
+* Configured deployment settings for production using autoscale target
+* All 7 database tables created successfully: technicians, teams, service_orders, reports, cities, neighborhoods, service_types
+
+## Development Setup
+
+### Prerequisites
+* Node.js environment (provided by Replit)
+* PostgreSQL database (configured in Replit)
+
+### Running the Application
+1. Dependencies are automatically installed via `npm install`
+2. Database schema is applied via `npm run db:push`
+3. Start development server: `npm run dev` (configured as workflow)
+4. Application runs on port 5000 with both frontend and API endpoints
+
+### Production Deployment
+* Build: `npm run build`
+* Start: `npm start`
+* Target: Autoscale deployment for stateless web application

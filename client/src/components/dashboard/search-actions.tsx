@@ -60,7 +60,7 @@ export default function SearchActions({ onNewReport, onManageTechnicians }: Sear
 
   // Auto-search with debounce
   useEffect(() => {
-    if (searchQuery.trim().length >= 2) {
+    if (searchQuery.trim().length >= 2 && allServiceOrders.length > 0) {
       const filtered = allServiceOrders.filter((order: ServiceOrder) => 
         order.code.toLowerCase().includes(searchQuery.toLowerCase())
       );
@@ -69,9 +69,11 @@ export default function SearchActions({ onNewReport, onManageTechnicians }: Sear
     } else {
       setSuggestions([]);
       setShowSuggestions(false);
-      setSearchResult(null);
+      if (searchQuery.trim().length === 0) {
+        setSearchResult(null);
+      }
     }
-  }, [searchQuery, allServiceOrders]);
+  }, [searchQuery, allServiceOrders.length]);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
