@@ -7,9 +7,7 @@ import CalendarView from "@/components/dashboard/calendar-view";
 import ReportsHistory from "@/components/dashboard/reports-history";
 import ReportModal from "@/components/modals/report-modal";
 import GeneratedReportModal from "@/components/modals/generated-report-modal";
-import TechnicianModal from "@/components/modals/technician-modal";
 import ReallocationModal from "@/components/modals/reallocation-modal";
-import SubstitutionModal from "@/components/modals/substitution-modal";
 import ConfigModal from "@/components/modals/config-modal";
 import AuthModal from "@/components/modals/auth-modal";
 import SchedulingModal from "@/components/modals/scheduling-modal";
@@ -22,9 +20,7 @@ import ReminderAlerts from "@/components/dashboard/reminder-alerts";
 export default function Dashboard() {
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [generatedReportModalOpen, setGeneratedReportModalOpen] = useState(false);
-  const [technicianModalOpen, setTechnicianModalOpen] = useState(false);
   const [reallocationModalOpen, setReallocationModalOpen] = useState(false);
-  const [substitutionModalOpen, setSubstitutionModalOpen] = useState(false);
   const [configModalOpen, setConfigModalOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [schedulingModalOpen, setSchedulingModalOpen] = useState(false);
@@ -48,14 +44,7 @@ export default function Dashboard() {
     setReallocationModalOpen(true);
   };
 
-  const handleSubstitution = (teamId: string) => {
-    setSelectedTeamId(teamId);
-    setSubstitutionModalOpen(true);
-  };
 
-  const handleEditTeam = (teamId: string) => {
-    setTechnicianModalOpen(true);
-  };
 
   const handleDateClick = (date: Date) => {
     setSelectedDate(date);
@@ -120,15 +109,12 @@ export default function Dashboard() {
         
         <SearchActions
           onNewReport={() => setReportModalOpen(true)}
-          onManageTechnicians={() => setTechnicianModalOpen(true)}
         />
         
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
           <div className="xl:col-span-2">
             <TeamsGrid
               onReallocate={handleReallocation}
-              onSubstitute={handleSubstitution}
-              onEditTeam={handleEditTeam}
               onAddServiceOrder={handleAddServiceOrder}
               onViewTeamServices={handleViewTeamServices}
             />
@@ -162,10 +148,6 @@ export default function Dashboard() {
         onEditReport={handleEditReport}
       />
 
-      <TechnicianModal
-        open={technicianModalOpen}
-        onOpenChange={setTechnicianModalOpen}
-      />
 
       <ReallocationModal
         open={reallocationModalOpen}
@@ -173,11 +155,6 @@ export default function Dashboard() {
         teamId={selectedTeamId}
       />
 
-      <SubstitutionModal
-        open={substitutionModalOpen}
-        onOpenChange={setSubstitutionModalOpen}
-        teamId={selectedTeamId}
-      />
 
       <AuthModal
         open={authModalOpen}

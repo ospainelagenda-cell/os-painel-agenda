@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, Plus, Users, Download, CheckCircle, XCircle, RotateCcw, Sticker, Ban, Edit } from "lucide-react";
+import { Search, Plus, Download, CheckCircle, XCircle, RotateCcw, Sticker, Ban, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -11,10 +11,9 @@ import EditServiceModal from "@/components/modals/edit-service-modal";
 
 interface SearchActionsProps {
   onNewReport: () => void;
-  onManageTechnicians: () => void;
 }
 
-export default function SearchActions({ onNewReport, onManageTechnicians }: SearchActionsProps) {
+export default function SearchActions({ onNewReport }: SearchActionsProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResult, setSearchResult] = useState<ServiceOrder | null>(null);
   const [suggestions, setSuggestions] = useState<ServiceOrder[]>([]);
@@ -257,14 +256,6 @@ export default function SearchActions({ onNewReport, onManageTechnicians }: Sear
           >
             <Plus className="mr-3 text-primary" />
             Novo Relatório
-          </Button>
-          <Button
-            className="w-full glass-button p-3 rounded-lg text-white font-medium text-left justify-start"
-            onClick={onManageTechnicians}
-            data-testid="button-manage-technicians"
-          >
-            <Users className="mr-3 text-accent" />
-            Gerenciar Técnicos
           </Button>
         </div>
       </div>

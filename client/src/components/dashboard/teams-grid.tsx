@@ -1,22 +1,20 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Edit, ArrowRightLeft, UserCheck, Calendar, Plus, AlertTriangle, Check, X } from "lucide-react";
+import { Edit, ArrowRightLeft, Calendar, Plus, AlertTriangle, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Team, ServiceOrder, Technician } from "@shared/schema";
+import type { Team, ServiceOrder } from "@shared/schema";
 
 interface TeamsGridProps {
   onReallocate: (teamId: string) => void;
-  onSubstitute: (teamId: string) => void;
-  onEditTeam?: (teamId: string) => void;
   onAddServiceOrder?: (teamId: string) => void;
   onViewTeamServices?: (teamId: string, teamName: string) => void;
 }
 
-export default function TeamsGrid({ onReallocate, onSubstitute, onEditTeam, onAddServiceOrder, onViewTeamServices }: TeamsGridProps) {
+export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamServices }: TeamsGridProps) {
   // Set today's date as default
   const today = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(today);
@@ -34,9 +32,6 @@ export default function TeamsGrid({ onReallocate, onSubstitute, onEditTeam, onAd
     queryKey: ["/api/service-orders"]
   });
 
-  const { data: technicians = [] } = useQuery<Technician[]>({
-    queryKey: ["/api/technicians"]
-  });
 
   const updateTeamNotesMutation = useMutation({
     mutationFn: async (data: { id: string; notes: string; team: Team }) => {
@@ -282,13 +277,6 @@ export default function TeamsGrid({ onReallocate, onSubstitute, onEditTeam, onAd
                     <div className="text-muted-foreground text-xs">Cancelado</div>
                   </div>
                 </div>
-                <Button 
-                  className="glass-button px-3 py-1 rounded-lg text-xs text-white"
-                  onClick={() => onEditTeam?.(team.id)}
-                  data-testid={`button-edit-team-${team.name.replace(/\s+/g, "-").toLowerCase()}`}
-                >
-                  <Edit className="h-3 w-3" />
-                </Button>
               </div>
 
               <div className="space-y-2">
@@ -333,14 +321,6 @@ export default function TeamsGrid({ onReallocate, onSubstitute, onEditTeam, onAd
                     >
                       <ArrowRightLeft className="mr-1 h-3 w-3" />
                       Realocar
-                    </Button>
-                    <Button
-                      className="flex-1 glass-button py-2 rounded-lg text-xs text-white"
-                      onClick={() => onSubstitute(team.id)}
-                      data-testid={`button-substitute-${team.name.replace(/\s+/g, "-").toLowerCase()}`}
-                    >
-                      <UserCheck className="mr-1 h-3 w-3" />
-                      Substituir
                     </Button>
                   </div>
                 </div>

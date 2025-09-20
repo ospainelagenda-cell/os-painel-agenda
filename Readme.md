@@ -115,3 +115,49 @@ Preferred communication style: Simple, everyday language.
 * Build: `npm run build`
 * Start: `npm start`
 * Target: Autoscale deployment for stateless web application
+
+
+# Service Order Management Dashboard
+
+## Overview
+A service order management dashboard built with React (frontend) and Express.js (backend) using Drizzle ORM with PostgreSQL. This system manages technicians, teams, service orders, and reports for field service operations.
+
+## Project Structure
+- `client/` - React frontend application
+- `server/` - Express.js backend API
+- `shared/` - Shared schema and types
+- Database: PostgreSQL with Drizzle ORM
+
+## Technology Stack
+- **Frontend**: React 18, Vite, TailwindCSS, Radix UI
+- **Backend**: Express.js, TypeScript
+- **Database**: PostgreSQL with Drizzle ORM
+- **Build**: Vite for frontend, ESBuild for backend
+
+## Environment Setup
+The application is configured for Replit environment with:
+- Development server on port 5000 (0.0.0.0)
+- Production-ready deployment configuration
+- Database migrations and seed data included
+
+## Recent Changes
+- September 20, 2025: Project imported and configured for Replit
+- Database schema migrated and populated with sample data
+- Development workflow configured and tested
+- Deployment settings configured for autoscale
+
+## Architecture
+- **Database**: 7 main tables (technicians, teams, service_orders, reports, cities, neighborhoods, service_types)
+- **API**: RESTful API with full CRUD operations
+- **Frontend**: Component-based React application with modern UI components
+- **Authentication**: Configured for passport-based authentication
+
+## Development
+- Run `npm run dev` to start development server
+- Database automatically configured with environment variables
+- HMR (Hot Module Replacement) enabled for development
+
+## Deployment
+- Configured for Replit autoscale deployment
+- Build command: `npm run build`
+- Start command: `npm start`

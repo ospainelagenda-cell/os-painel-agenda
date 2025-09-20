@@ -1,6 +1,4 @@
 import { 
-  type Technician, 
-  type InsertTechnician,
   type Team,
   type InsertTeam,
   type ServiceOrder,
@@ -17,12 +15,6 @@ import {
 import { randomUUID } from "crypto";
 
 export interface IStorage {
-  // Technicians
-  getTechnician(id: string): Promise<Technician | undefined>;
-  getAllTechnicians(): Promise<Technician[]>;
-  createTechnician(technician: InsertTechnician): Promise<Technician>;
-  updateTechnician(id: string, technician: Partial<InsertTechnician>): Promise<Technician | undefined>;
-  deleteTechnician(id: string): Promise<boolean>;
 
   // Teams
   getTeam(id: string): Promise<Team | undefined>;
@@ -70,7 +62,6 @@ export interface IStorage {
 }
 
 export class MemStorage implements IStorage {
-  private technicians: Map<string, Technician>;
   private teams: Map<string, Team>;
   private serviceOrders: Map<string, ServiceOrder>;
   private reports: Map<string, Report>;
@@ -79,7 +70,6 @@ export class MemStorage implements IStorage {
   private serviceTypes: Map<string, ServiceType>;
 
   constructor() {
-    this.technicians = new Map();
     this.teams = new Map();
     this.serviceOrders = new Map();
     this.reports = new Map();
@@ -92,61 +82,24 @@ export class MemStorage implements IStorage {
   }
 
   private async initializeSampleData() {
-    // Create sample technicians
-    const tech1 = await this.createTechnician({
-      name: "Victor F.",
-      cities: ["Centro", "Vila Nova", "Jardim São Paulo"],
-      neighborhoods: ["Centro", "Vila Nova", "Jardim São Paulo"]
-    });
-
-    const tech2 = await this.createTechnician({
-      name: "Shelbert",
-      cities: ["Centro", "Bairro Alto", "Santa Rita"],
-      neighborhoods: ["Centro", "Bairro Alto", "Santa Rita"]
-    });
-
-    const tech3 = await this.createTechnician({
-      name: "Everton",
-      cities: ["Centro", "Vila Nova"],
-      neighborhoods: ["Centro", "Vila Nova"]
-    });
-
-    const tech4 = await this.createTechnician({
-      name: "Daniel",
-      cities: ["Bairro Alto", "Santa Rita"],
-      neighborhoods: ["Bairro Alto", "Santa Rita"]
-    });
-
-    const tech5 = await this.createTechnician({
-      name: "Samuel",
-      cities: ["Centro", "Jardim São Paulo"],
-      neighborhoods: ["Centro", "Jardim São Paulo"]
-    });
-
-    const tech6 = await this.createTechnician({
-      name: "Wesley",
-      cities: ["Vila Nova", "Santa Rita"],
-      neighborhoods: ["Vila Nova", "Santa Rita"]
-    });
-
-    // Create sample teams
+    // Create sample teams (without technician references)
     const team1 = await this.createTeam({
-      name: "VICTOR F. E SHELBERT",
-      technicianIds: [tech1.id, tech2.id],
+      name: "EQUIPE 1",
+      technicianIds: [],
       boxNumber: "CAIXA - 01",
       notes: "Não pode passar do horário"
     });
 
     const team2 = await this.createTeam({
-      name: "EVERTON E DANIEL",
-      technicianIds: [tech3.id, tech4.id],
+      name: "EQUIPE 2", 
+      technicianIds: [],
       boxNumber: "CAIXA - 02",
       notes: "Disponível apenas pela manhã"
     });
 
     const team3 = await this.createTeam({
-      name: "SAMUEL E WESLEY",
-      technicianIds: [tech5.id, tech6.id],
+      name: "EQUIPE 3",
+      technicianIds: [],
       boxNumber: "CAIXA - 03",
       notes: ""
     });
@@ -367,50 +320,6 @@ Taxa de conclusão: 92.7%`
 
   }
 
-  // Technician methods
-  async getTechnician(id: string): Promise<Technician | undefined> {
-    return this.technicians.get(id);
-  }
-
-  async getAllTechnicians(): Promise<Technician[]> {
-    return Array.from(this.technicians.values()).filter(tech => tech.isActive);
-  }
-
-  async createTechnician(insertTechnician: InsertTechnician): Promise<Technician> {
-    const id = randomUUID();
-    const technician: Technician = { 
-      ...insertTechnician, 
-      id, 
-      isActive: true,
-      cities: insertTechnician.cities || [],
-      neighborhoods: insertTechnician.neighborhoods || []
-    };
-    this.technicians.set(id, technician);
-    return technician;
-  }
-
-  async updateTechnician(id: string, updateData: Partial<InsertTechnician>): Promise<Technician | undefined> {
-    const technician = this.technicians.get(id);
-    if (!technician) return undefined;
-    
-    const updated: Technician = { 
-      ...technician, 
-      ...updateData,
-      cities: updateData.cities || technician.cities,
-      neighborhoods: updateData.neighborhoods || technician.neighborhoods
-    };
-    this.technicians.set(id, updated);
-    return updated;
-  }
-
-  async deleteTechnician(id: string): Promise<boolean> {
-    const technician = this.technicians.get(id);
-    if (!technician) return false;
-    
-    const updated = { ...technician, isActive: false };
-    this.technicians.set(id, updated);
-    return true;
-  }
 
   // Team methods
   async getTeam(id: string): Promise<Team | undefined> {

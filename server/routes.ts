@@ -1,59 +1,9 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertTechnicianSchema, insertTeamSchema, updateTeamSchema, insertServiceOrderSchema, insertReportSchema, insertCitySchema, insertNeighborhoodSchema, insertServiceTypeSchema } from "@shared/schema";
+import { insertTeamSchema, updateTeamSchema, insertServiceOrderSchema, insertReportSchema, insertCitySchema, insertNeighborhoodSchema, insertServiceTypeSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  // Technician routes
-  app.get("/api/technicians", async (req, res) => {
-    try {
-      const technicians = await storage.getAllTechnicians();
-      res.json(technicians);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to fetch technicians" });
-    }
-  });
-
-  app.post("/api/technicians", async (req, res) => {
-    try {
-      const validatedData = insertTechnicianSchema.parse(req.body);
-      const technician = await storage.createTechnician(validatedData);
-      res.status(201).json(technician);
-    } catch (error) {
-      res.status(400).json({ message: "Invalid technician data" });
-    }
-  });
-
-  app.put("/api/technicians/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const validatedData = insertTechnicianSchema.partial().parse(req.body);
-      const technician = await storage.updateTechnician(id, validatedData);
-      
-      if (!technician) {
-        return res.status(404).json({ message: "Technician not found" });
-      }
-      
-      res.json(technician);
-    } catch (error) {
-      res.status(400).json({ message: "Invalid technician data" });
-    }
-  });
-
-  app.delete("/api/technicians/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const success = await storage.deleteTechnician(id);
-      
-      if (!success) {
-        return res.status(404).json({ message: "Technician not found" });
-      }
-      
-      res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ message: "Failed to delete technician" });
-    }
-  });
 
   // Team routes
   app.get("/api/teams", async (req, res) => {
@@ -403,47 +353,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/teams/substitute", async (req, res) => {
-    try {
-      const { teamId, oldTechnicianId, newTechnicianId } = req.body;
-      
-      if (!teamId || !oldTechnicianId || !newTechnicianId) {
-        return res.status(400).json({ message: "Invalid substitution data" });
-      }
-
-      const team = await storage.getTeam(teamId);
-      if (!team) {
-        return res.status(404).json({ message: "Team not found" });
-      }
-
-      const updatedTechnicianIds = team.technicianIds.map(id => 
-        id === oldTechnicianId ? newTechnicianId : id
-      );
-
-      // Get technician names to update team name
-      const technicians = await storage.getAllTechnicians();
-      const teamTechnicians = updatedTechnicianIds
-        .map(id => technicians.find(tech => tech.id === id))
-        .filter((tech): tech is NonNullable<typeof tech> => tech !== undefined);
-      
-      // Generate new team name based on current technicians
-      const newTeamName = teamTechnicians.map(tech => tech.name).join(" E ");
-
-      const updatedTeam = await storage.updateTeam(teamId, { 
-        technicianIds: updatedTechnicianIds,
-        name: newTeamName
-      });
-      res.json(updatedTeam);
-    } catch (error) {
-      res.status(500).json({ message: "Failed to substitute technician" });
-    }
-  });
 
   // Export/Import routes
   app.get("/api/export", async (req, res) => {
     try {
       const data = {
-        technicians: await storage.getAllTechnicians(),
         teams: await storage.getAllTeams(),
         serviceOrders: await storage.getAllServiceOrders(),
         reports: await storage.getAllReports()

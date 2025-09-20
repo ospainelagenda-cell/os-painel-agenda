@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import type { ServiceOrder, Team, Technician } from "@shared/schema";
+import type { ServiceOrder, Team } from "@shared/schema";
 
 export default function AlertsSection() {
   // Set today's date as default
@@ -29,9 +29,6 @@ export default function AlertsSection() {
     queryKey: ["/api/teams"]
   });
 
-  const { data: technicians = [] } = useQuery<Technician[]>({
-    queryKey: ["/api/technicians"]
-  });
 
   const alertOrders = serviceOrders.filter(order => {
     const hasAlert = order.alert;
