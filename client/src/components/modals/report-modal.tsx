@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Team, ServiceOrder, City, Neighborhood } from "@shared/schema";
+import type { Team, ServiceOrder, City, Neighborhood, Technician } from "@shared/schema";
 
 interface ReportModalProps {
   open: boolean;
@@ -21,15 +21,24 @@ interface NewServiceOrder {
   code: string;
   type: string;
   teamId: string;
+  technicianId: string;
+  boxIndex: string; // Index da caixa selecionada (como string)
   alert: string;
   cityId: string;
   neighborhoodId: string;
+}
+
+interface BoxData {
+  boxNumber: string;
+  technicianIds: string[];
+  teamId?: string;
 }
 
 export default function ReportModal({ open, onOpenChange, onReportGenerated }: ReportModalProps) {
   const [reportName, setReportName] = useState("");
   const [reportDate, setReportDate] = useState("");
   const [shift, setShift] = useState("");
+  const [boxes, setBoxes] = useState<BoxData[]>([{ boxNumber: "", technicianIds: [] }]);
   const [newServiceOrders, setNewServiceOrders] = useState<NewServiceOrder[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -46,12 +55,17 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     queryKey: ["/api/cities"]
   });
 
+  const { data: technicians = [] } = useQuery<Technician[]>({
+    queryKey: ["/api/technicians"]
+  });
+
   const createServiceOrderMutation = useMutation({
     mutationFn: async (order: NewServiceOrder) => {
       const response = await apiRequest("POST", "/api/service-orders", {
         code: order.code,
         type: order.type,
-        teamId: order.teamId,
+        teamId: order.teamId || null, // Permitir criação sem team por enquanto
+        technicianId: order.technicianId || null, // Incluir técnico selecionado
         alert: order.alert || undefined,
         scheduledDate: reportDate,
         status: "Pendente"
@@ -66,14 +80,103 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     }
   });
 
+  const addBox = () => {
+    setBoxes(prev => [...prev, { boxNumber: "", technicianIds: [] }]);
+  };
+
+  const updateBoxNumber = (index: number, boxNumber: string) => {
+    setBoxes(prev => prev.map((box, i) => i === index ? { ...box, boxNumber } : box));
+  };
+
+  const updateBoxTechnicians = (index: number, technicianIds: string[]) => {
+    // Encontrar técnicos adicionados (novos)
+    const currentBox = boxes[index];
+    const addedTechnicians = technicianIds.filter(id => !currentBox.technicianIds.includes(id));
+    
+    setBoxes(prev => prev.map((box, i) => {
+      if (i === index) {
+        // Atualizar caixa atual
+        return { ...box, technicianIds };
+      } else {
+        // Remover técnicos adicionados de outras caixas para garantir unicidade
+        return { ...box, technicianIds: box.technicianIds.filter(id => !addedTechnicians.includes(id)) };
+      }
+    }));
+    
+    // Limpar service orders que referenciam técnicos removidos desta caixa
+    setNewServiceOrders(prev => prev.map(order => {
+      if (order.boxIndex === index.toString() && order.technicianId && !technicianIds.includes(order.technicianId)) {
+        // Técnico foi removido da caixa - limpar seleção
+        return { ...order, technicianId: "" };
+      }
+      return order;
+    }));
+  };
+
+  const removeBox = (index: number) => {
+    setBoxes(prev => prev.filter((_, i) => i !== index));
+    
+    // Limpar service orders que referenciam boxes removidos ou ajustar índices
+    setNewServiceOrders(prev => prev.map(order => {
+      if (order.boxIndex === "") return order; // Nenhuma caixa selecionada, manter como está
+      
+      const orderBoxIndex = Number(order.boxIndex);
+      if (orderBoxIndex === index) {
+        // Box removido - resetar seleção
+        return { ...order, boxIndex: "", technicianId: "" };
+      } else if (orderBoxIndex > index) {
+        // Ajustar índice para box que mudou de posição
+        return { ...order, boxIndex: (orderBoxIndex - 1).toString() };
+      }
+      return order; // Box não afetado
+    }));
+  };
+
   const generateReport = async () => {
-    if (!reportName || !reportDate || !shift) {
+    const validBoxes = boxes.filter(box => box.boxNumber.trim() !== "" && box.technicianIds.length > 0);
+    if (!reportName || !reportDate || !shift || validBoxes.length === 0) {
+      return;
+    }
+
+    // Validar duplicatas de técnicos entre caixas antes de gerar relatório
+    const allTechnicianIds: string[] = [];
+    const duplicateTechnicians: string[] = [];
+    
+    validBoxes.forEach(box => {
+      box.technicianIds.forEach(techId => {
+        if (allTechnicianIds.includes(techId)) {
+          if (!duplicateTechnicians.includes(techId)) {
+            duplicateTechnicians.push(techId);
+          }
+        } else {
+          allTechnicianIds.push(techId);
+        }
+      });
+    });
+    
+    if (duplicateTechnicians.length > 0) {
+      const duplicateNames = duplicateTechnicians.map(id => {
+        const tech = technicians.find(t => t.id === id);
+        return tech ? tech.name : id;
+      }).join(", ");
+      
+      console.error(`Erro: Técnicos duplicados encontrados: ${duplicateNames}`);
+      alert(`Erro: Os seguintes técnicos estão em múltiplas caixas: ${duplicateNames}. Corrija antes de gerar o relatório.`);
       return;
     }
 
     // Create new service orders first
     for (const order of newServiceOrders) {
-      if (order.code && order.type && order.teamId) {
+      if (order.code && order.type && order.technicianId) {
+        // Validar integridade: verificar se box e técnico são válidos
+        const boxIndex = Number(order.boxIndex);
+        const selectedBox = boxIndex >= 0 && boxIndex < boxes.length ? boxes[boxIndex] : undefined;
+        
+        if (!selectedBox || !selectedBox.technicianIds.includes(order.technicianId)) {
+          console.warn(`Skipping invalid service order: ${order.code} - box or technician invalid`);
+          continue;
+        }
+        
         try {
           await createServiceOrderMutation.mutateAsync(order);
         } catch (error) {
@@ -82,12 +185,12 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
       }
     }
 
-    // Wait a moment for the queries to refresh
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
-    // Refetch service orders to include newly created ones
+    // Invalidate and refetch service orders to include newly created ones
     await queryClient.invalidateQueries({ queryKey: ["/api/service-orders"] });
-    const updatedServiceOrders = await queryClient.fetchQuery({ queryKey: ["/api/service-orders"] });
+    const updatedServiceOrders = await queryClient.fetchQuery({ 
+      queryKey: ["/api/service-orders"], 
+      staleTime: 0 
+    });
 
     const formatDate = (dateStr: string) => {
       const date = new Date(dateStr);
@@ -97,16 +200,33 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     let content = `Serviços da Agenda: ${formatDate(reportDate)} - TURNO: ${shift.toUpperCase()}\n`;
     content += "-".repeat(57) + "\n";
 
-    teams.forEach(team => {
-      const teamOrders = (updatedServiceOrders as ServiceOrder[]).filter(order => 
-        order.teamId === team.id && order.scheduledDate === reportDate
+    // Agrupar por Caixa → Técnicos → Service Orders
+    validBoxes.forEach(box => {
+      // Encontrar service orders para técnicos desta caixa na data especificada
+      const boxOrders = (updatedServiceOrders as ServiceOrder[]).filter(order => 
+        box.technicianIds.includes(order.technicianId) && 
+        order.scheduledDate === reportDate
       );
       
-      if (teamOrders.length > 0) {
-        content += `${team.name}: (${team.boxNumber})\n`;
-        teamOrders.forEach(order => {
-          content += `- ${order.code} ${order.type}\n`;
+      if (boxOrders.length > 0) {
+        content += `CAIXA ${box.boxNumber}:\n`;
+        
+        // Agrupar ordens por técnico
+        box.technicianIds.forEach(technicianId => {
+          const technicianOrders = boxOrders.filter(order => order.technicianId === technicianId);
+          
+          if (technicianOrders.length > 0) {
+            // Encontrar nome do técnico
+            const technician = technicians.find(t => t.id === technicianId);
+            const technicianName = technician ? technician.name : `Técnico ${technicianId}`;
+            
+            content += `  ${technicianName}:\n`;
+            technicianOrders.forEach(order => {
+              content += `    - ${order.code} ${order.type}\n`;
+            });
+          }
         });
+        
         content += "-".repeat(57) + "\n";
       }
     });
@@ -131,6 +251,8 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
       code: "", 
       type: "", 
       teamId: "", 
+      technicianId: "",
+      boxIndex: "", // "" significa nenhuma caixa selecionada
       alert: "", 
       cityId: "", 
       neighborhoodId: "" 
@@ -215,6 +337,126 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
           <div>
             <div className="flex items-center justify-between mb-4">
               <Label className="text-lg font-medium text-white">
+                Números das Caixas
+              </Label>
+              <Button
+                type="button"
+                className="glass-button px-3 py-2 rounded-lg text-white text-sm"
+                onClick={addBox}
+                data-testid="button-add-box"
+              >
+                <Plus className="mr-1 h-4 w-4" />
+                Adicionar Caixa
+              </Button>
+            </div>
+            
+            <div className="space-y-3">
+              {boxes.map((box, index) => (
+                <div key={index} className="glass-card p-4 rounded-lg space-y-3">
+                  <div className="flex items-start space-x-3">
+                    <div className="flex-1 space-y-3">
+                      <div>
+                        <Label className="block text-xs font-medium text-muted-foreground mb-1">
+                          Número da Caixa
+                        </Label>
+                        <Input
+                          type="text"
+                          value={box.boxNumber}
+                          onChange={(e) => updateBoxNumber(index, e.target.value)}
+                          className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-white text-sm"
+                          placeholder="Ex: CAIXA-01"
+                          data-testid={`input-box-number-${index}`}
+                        />
+                      </div>
+                      
+                      <div>
+                        <Label className="block text-xs font-medium text-muted-foreground mb-2">
+                          Técnicos Responsáveis
+                        </Label>
+                        <div className="space-y-2">
+                          {technicians.map((technician) => {
+                            const isSelected = box.technicianIds.includes(technician.id);
+                            // Verificar se técnico já está em outra caixa
+                            const isInOtherBox = boxes.some((otherBox, otherIndex) => 
+                              otherIndex !== index && otherBox.technicianIds.includes(technician.id)
+                            );
+                            const isDisabled = isInOtherBox && !isSelected;
+                            
+                            return (
+                              <label key={technician.id} className={`flex items-center space-x-2 ${isDisabled ? 'opacity-50' : ''}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  disabled={isDisabled}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      updateBoxTechnicians(index, [...box.technicianIds, technician.id]);
+                                    } else {
+                                      updateBoxTechnicians(index, box.technicianIds.filter(id => id !== technician.id));
+                                    }
+                                  }}
+                                  className="rounded bg-secondary border-border text-primary focus:ring-primary focus:ring-offset-0 disabled:cursor-not-allowed"
+                                  data-testid={`checkbox-technician-${index}-${technician.id}`}
+                                />
+                                <span className={`text-sm ${isDisabled ? 'text-muted-foreground' : 'text-white'}`}>
+                                  {technician.name}
+                                  {isInOtherBox && !isSelected && (
+                                    <span className="ml-1 text-xs text-muted-foreground">(em outra caixa)</span>
+                                  )}
+                                </span>
+                              </label>
+                            );
+                          })}
+                          {technicians.length === 0 && (
+                            <div className="text-muted-foreground text-sm">
+                              Nenhum técnico cadastrado
+                            </div>
+                          )}
+                        </div>
+                        
+                        {box.technicianIds.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-border/30">
+                            <Label className="text-xs text-muted-foreground">Técnicos selecionados:</Label>
+                            <div className="text-sm text-primary">
+                              {technicians
+                                .filter(t => box.technicianIds.includes(t.id))
+                                .map(t => t.name)
+                                .join(", ")}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    {boxes.length > 1 && (
+                      <div className="flex items-start pt-4">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="glass-button p-2 text-white hover:text-red-400"
+                          onClick={() => removeBox(index)}
+                          data-testid={`button-remove-box-${index}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+              
+              {boxes.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  Nenhuma caixa adicionada
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <Label className="text-lg font-medium text-white">
                 Ordens de Serviço
               </Label>
               <Button
@@ -268,18 +510,77 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
                     
                     <div>
                       <Label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Equipe
+                        Caixa
                       </Label>
-                      <Select value={order.teamId} onValueChange={(value) => updateServiceOrder(index, 'teamId', value)}>
+                      <Select 
+                        value={order.boxIndex} 
+                        onValueChange={(value) => {
+                          updateServiceOrder(index, 'boxIndex', value);
+                          // Reset técnico quando mudar de caixa
+                          updateServiceOrder(index, 'technicianId', "");
+                        }}
+                      >
                         <SelectTrigger className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-white text-sm">
-                          <SelectValue placeholder="Selecione" />
+                          <SelectValue placeholder="Selecione uma caixa" />
                         </SelectTrigger>
                         <SelectContent>
-                          {teams.map((team) => (
-                            <SelectItem key={team.id} value={team.id}>
-                              {team.name} ({team.boxNumber})
-                            </SelectItem>
-                          ))}
+                          {boxes.map((box, originalIndex) => {
+                            // Só renderizar boxes válidos, mas manter índices originais
+                            if (box.boxNumber.trim() !== "" && box.technicianIds.length > 0) {
+                              return (
+                                <SelectItem key={originalIndex} value={originalIndex.toString()}>
+                                  {box.boxNumber}
+                                </SelectItem>
+                              );
+                            }
+                            return null;
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div>
+                      <Label className="block text-xs font-medium text-muted-foreground mb-1">
+                        Técnico
+                      </Label>
+                      <Select 
+                        value={order.technicianId} 
+                        onValueChange={(value) => updateServiceOrder(index, 'technicianId', value)}
+                        disabled={order.boxIndex === ""}
+                      >
+                        <SelectTrigger className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-white text-sm">
+                          <SelectValue placeholder={order.boxIndex === "" ? "Primeiro selecione uma caixa" : "Selecione um técnico"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(() => {
+                            if (order.boxIndex === "") {
+                              return (
+                                <SelectItem value="no-technicians" disabled>
+                                  Selecione uma caixa primeiro
+                                </SelectItem>
+                              );
+                            }
+                            
+                            const selectedBoxIndex = Number(order.boxIndex);
+                            const selectedBox = selectedBoxIndex >= 0 && selectedBoxIndex < boxes.length ? boxes[selectedBoxIndex] : undefined;
+                            
+                            if (!selectedBox) {
+                              return (
+                                <SelectItem value="invalid-box" disabled>
+                                  Caixa selecionada inválida
+                                </SelectItem>
+                              );
+                            }
+                            
+                            return selectedBox.technicianIds.map((technicianId) => {
+                              const technician = technicians.find(t => t.id === technicianId);
+                              return technician ? (
+                                <SelectItem key={technician.id} value={technician.id}>
+                                  {technician.name}
+                                </SelectItem>
+                              ) : null;
+                            });
+                          })()}
                         </SelectContent>
                       </Select>
                     </div>
@@ -381,7 +682,7 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
           <Button
             className="flex-1 bg-primary hover:bg-primary/90 py-3 rounded-lg text-white font-medium"
             onClick={generateReport}
-            disabled={!reportName || !reportDate || !shift || createServiceOrderMutation.isPending}
+            disabled={!reportName || !reportDate || !shift || boxes.filter(box => box.boxNumber.trim() !== "" && box.technicianIds.length > 0).length === 0 || createServiceOrderMutation.isPending}
             data-testid="button-generate-report"
           >
             Gerar Relatório

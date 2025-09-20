@@ -1,9 +1,60 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { insertTeamSchema, updateTeamSchema, insertServiceOrderSchema, insertReportSchema, insertCitySchema, insertNeighborhoodSchema, insertServiceTypeSchema } from "@shared/schema";
+import { insertTechnicianSchema, insertTeamSchema, updateTeamSchema, insertServiceOrderSchema, insertReportSchema, insertCitySchema, insertNeighborhoodSchema, insertServiceTypeSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+
+  // Technician routes
+  app.get("/api/technicians", async (req, res) => {
+    try {
+      const technicians = await storage.getAllTechnicians();
+      res.json(technicians);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch technicians" });
+    }
+  });
+
+  app.post("/api/technicians", async (req, res) => {
+    try {
+      const validatedData = insertTechnicianSchema.parse(req.body);
+      const technician = await storage.createTechnician(validatedData);
+      res.status(201).json(technician);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid technician data" });
+    }
+  });
+
+  app.put("/api/technicians/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = insertTechnicianSchema.partial().parse(req.body);
+      const technician = await storage.updateTechnician(id, validatedData);
+      
+      if (!technician) {
+        return res.status(404).json({ message: "Technician not found" });
+      }
+      
+      res.json(technician);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid technician data" });
+    }
+  });
+
+  app.delete("/api/technicians/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const success = await storage.deleteTechnician(id);
+      
+      if (!success) {
+        return res.status(404).json({ message: "Technician not found" });
+      }
+      
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete technician" });
+    }
+  });
 
   // Team routes
   app.get("/api/teams", async (req, res) => {

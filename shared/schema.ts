@@ -26,6 +26,7 @@ export const serviceOrders = pgTable("service_orders", {
   type: text("type").notNull(), // ATIVAÇÃO, LOSS, UPGRADE, etc
   status: text("status").notNull().default("Pendente"), // Concluído, Reagendado, Pendente
   teamId: varchar("team_id").references(() => teams.id),
+  technicianId: varchar("technician_id").references(() => technicians.id), // Specific technician within team
   alert: text("alert"), // Special instructions like "Ligar 15 minutos antes"
   scheduledDate: text("scheduled_date"), // Date when the service is scheduled
   scheduledTime: text("scheduled_time"), // Time when the service is scheduled

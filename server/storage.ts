@@ -10,11 +10,20 @@ import {
   type Neighborhood,
   type InsertNeighborhood,
   type ServiceType,
-  type InsertServiceType
+  type InsertServiceType,
+  type Technician,
+  type InsertTechnician
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 export interface IStorage {
+
+  // Technicians
+  getTechnician(id: string): Promise<Technician | undefined>;
+  getAllTechnicians(): Promise<Technician[]>;
+  createTechnician(technician: InsertTechnician): Promise<Technician>;
+  updateTechnician(id: string, technician: Partial<InsertTechnician> & { isActive?: boolean }): Promise<Technician | undefined>;
+  deleteTechnician(id: string): Promise<boolean>;
 
   // Teams
   getTeam(id: string): Promise<Team | undefined>;
@@ -62,6 +71,7 @@ export interface IStorage {
 }
 
 export class MemStorage implements IStorage {
+  private technicians: Map<string, Technician>;
   private teams: Map<string, Team>;
   private serviceOrders: Map<string, ServiceOrder>;
   private reports: Map<string, Report>;
@@ -70,6 +80,7 @@ export class MemStorage implements IStorage {
   private serviceTypes: Map<string, ServiceType>;
 
   constructor() {
+    this.technicians = new Map();
     this.teams = new Map();
     this.serviceOrders = new Map();
     this.reports = new Map();
@@ -82,24 +93,67 @@ export class MemStorage implements IStorage {
   }
 
   private async initializeSampleData() {
-    // Create sample teams (without technician references)
+    // Create sample technicians first
+    const technician1 = await this.createTechnician({
+      name: "Hugo Silva",
+      cities: ["UBA-MG"],
+      neighborhoods: ["Centro", "Santa Cruz", "Bom Pastor"]
+    });
+
+    const technician2 = await this.createTechnician({
+      name: "Shelbert Costa", 
+      cities: ["UBA-MG"],
+      neighborhoods: ["Centro", "Jardim Primavera", "São Pedro"]
+    });
+
+    const technician3 = await this.createTechnician({
+      name: "Victor Fernandes",
+      cities: ["UBA-MG", "TOCANTINS-MG"],
+      neighborhoods: ["Centro", "Bela Vista", "CENTRO"]
+    });
+
+    const technician4 = await this.createTechnician({
+      name: "Everton Rodrigues",
+      cities: ["UBA-MG"],
+      neighborhoods: ["Industrial", "Peluso", "Laranjal"]
+    });
+
+    const technician5 = await this.createTechnician({
+      name: "Daniel Santos",
+      cities: ["TOCANTINS-MG"],
+      neighborhoods: ["CENTRO", "BOA VISTA", "PATRIMONIO"]
+    });
+
+    const technician6 = await this.createTechnician({
+      name: "Samuel Oliveira",
+      cities: ["UBA-MG"],
+      neighborhoods: ["Universitário", "Palmeiras", "Cristal"]
+    });
+
+    const technician7 = await this.createTechnician({
+      name: "Wesley Almeida",
+      cities: ["UBA-MG"],
+      neighborhoods: ["Santa Terezinha", "São José", "Vitória"]
+    });
+
+    // Create sample teams with technician references
     const team1 = await this.createTeam({
       name: "EQUIPE 1",
-      technicianIds: [],
+      technicianIds: [technician1.id, technician2.id], // Hugo e Shelbert
       boxNumber: "CAIXA - 01",
       notes: "Não pode passar do horário"
     });
 
     const team2 = await this.createTeam({
       name: "EQUIPE 2", 
-      technicianIds: [],
+      technicianIds: [technician4.id, technician5.id], // Everton e Daniel
       boxNumber: "CAIXA - 02",
       notes: "Disponível apenas pela manhã"
     });
 
     const team3 = await this.createTeam({
       name: "EQUIPE 3",
-      technicianIds: [],
+      technicianIds: [technician6.id, technician7.id], // Samuel e Wesley
       boxNumber: "CAIXA - 03",
       notes: ""
     });
@@ -320,6 +374,45 @@ Taxa de conclusão: 92.7%`
 
   }
 
+  // Technician methods
+  async getTechnician(id: string): Promise<Technician | undefined> {
+    return this.technicians.get(id);
+  }
+
+  async getAllTechnicians(): Promise<Technician[]> {
+    return Array.from(this.technicians.values()).filter(technician => technician.isActive);
+  }
+
+  async createTechnician(insertTechnician: InsertTechnician): Promise<Technician> {
+    const id = randomUUID();
+    const technician: Technician = { 
+      ...insertTechnician, 
+      id, 
+      isActive: true,
+      cities: insertTechnician.cities || [],
+      neighborhoods: insertTechnician.neighborhoods || []
+    };
+    this.technicians.set(id, technician);
+    return technician;
+  }
+
+  async updateTechnician(id: string, updateData: Partial<InsertTechnician> & { isActive?: boolean }): Promise<Technician | undefined> {
+    const technician = this.technicians.get(id);
+    if (!technician) return undefined;
+    
+    const updated = { ...technician, ...updateData };
+    this.technicians.set(id, updated);
+    return updated;
+  }
+
+  async deleteTechnician(id: string): Promise<boolean> {
+    const technician = this.technicians.get(id);
+    if (!technician) return false;
+    
+    const updated = { ...technician, isActive: false };
+    this.technicians.set(id, updated);
+    return true;
+  }
 
   // Team methods
   async getTeam(id: string): Promise<Team | undefined> {
@@ -384,6 +477,7 @@ Taxa de conclusão: 92.7%`
       id, 
       createdAt: new Date(),
       teamId: insertServiceOrder.teamId || null,
+      technicianId: insertServiceOrder.technicianId || null,
       alert: insertServiceOrder.alert || null,
       scheduledDate: insertServiceOrder.scheduledDate || null,
       scheduledTime: insertServiceOrder.scheduledTime || null,
