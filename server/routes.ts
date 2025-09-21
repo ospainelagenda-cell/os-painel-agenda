@@ -384,7 +384,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk operations
   app.post("/api/service-orders/reallocate", async (req, res) => {
     try {
-      const { serviceOrderIds, newTeamId } = req.body;
+      const { serviceOrderIds, newTeamId, clearTechnician = true } = req.body;
       
       if (!Array.isArray(serviceOrderIds) || !newTeamId) {
         return res.status(400).json({ message: "Invalid reallocation data" });
@@ -392,7 +392,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const results = [];
       for (const orderId of serviceOrderIds) {
-        const updated = await storage.updateServiceOrder(orderId, { teamId: newTeamId });
+        const updateData: any = { teamId: newTeamId };
+        
+        // Limpar o technicianId quando realocando (padrão: true)
+        if (clearTechnician) {
+          updateData.technicianId = null;
+        }
+        
+        const updated = await storage.updateServiceOrder(orderId, updateData);
         if (updated) {
           results.push(updated);
         }

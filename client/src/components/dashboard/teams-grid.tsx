@@ -1,20 +1,21 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Edit, ArrowRightLeft, Calendar, Plus, AlertTriangle, Check, X } from "lucide-react";
+import { Edit, ArrowRightLeft, Calendar, Plus, AlertTriangle, Check, X, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Team, ServiceOrder } from "@shared/schema";
+import type { Team, ServiceOrder, Technician } from "@shared/schema";
 
 interface TeamsGridProps {
   onReallocate: (teamId: string) => void;
   onAddServiceOrder?: (teamId: string) => void;
   onViewTeamServices?: (teamId: string, teamName: string) => void;
+  onManageTechnicians?: (teamId: string) => void;
 }
 
-export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamServices }: TeamsGridProps) {
+export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamServices, onManageTechnicians }: TeamsGridProps) {
   // Set today's date as default
   const today = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(today);
@@ -26,6 +27,10 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
   
   const { data: teams = [] } = useQuery<Team[]>({
     queryKey: ["/api/teams"]
+  });
+
+  const { data: technicians = [] } = useQuery<Technician[]>({
+    queryKey: ["/api/technicians"]
   });
 
   const { data: serviceOrders = [] } = useQuery<ServiceOrder[]>({
@@ -70,6 +75,13 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
   const handleCancelEditingNotes = () => {
     setEditingNotes(null);
     setNotesInput("");
+  };
+
+  const getTechnicianNames = (technicianIds: string[]) => {
+    const names = technicianIds
+      .map(id => technicians.find(tech => tech.id === id)?.name)
+      .filter(Boolean);
+    return names.length > 0 ? names.join(", ") : "Nenhum técnico atribuído";
   };
 
   const getTeamServiceOrders = (teamId: string) => {
@@ -181,7 +193,7 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex flex-col">
-                  <h3 className="font-semibold text-white">{team.name}</h3>
+                  <h3 className="font-semibold text-white">{getTechnicianNames(team.technicianIds)}</h3>
                   {allServicesCompleted && (
                     <span className="text-xs text-green-400 font-medium mt-1">✓ Equipe Livre</span>
                   )}
@@ -321,6 +333,14 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
                     >
                       <ArrowRightLeft className="mr-1 h-3 w-3" />
                       Realocar
+                    </Button>
+                    <Button
+                      className="flex-1 glass-button py-2 rounded-lg text-xs text-white bg-blue-500/20 hover:bg-blue-500/30"
+                      onClick={() => onManageTechnicians?.(team.id)}
+                      data-testid={`button-manage-technicians-${team.name.replace(/\s+/g, "-").toLowerCase()}`}
+                    >
+                      <Users className="mr-1 h-3 w-3" />
+                      Gerenciar
                     </Button>
                   </div>
                 </div>

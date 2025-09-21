@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Team, ServiceOrder } from "@shared/schema";
+import type { Team, ServiceOrder, Technician } from "@shared/schema";
 
 interface ReallocationModalProps {
   open: boolean;
@@ -30,6 +30,10 @@ export default function ReallocationModal({ open, onOpenChange, teamId }: Reallo
     queryKey: ["/api/teams"]
   });
 
+  const { data: technicians = [] } = useQuery<Technician[]>({
+    queryKey: ["/api/technicians"]
+  });
+
   const { data: serviceOrders = [] } = useQuery<ServiceOrder[]>({
     queryKey: ["/api/service-orders"]
   });
@@ -41,6 +45,13 @@ export default function ReallocationModal({ open, onOpenChange, teamId }: Reallo
     return matchesTeam && order.scheduledDate === filterDate;
   });
   const availableTeams = teams.filter(team => team.id !== teamId);
+
+  const getTechnicianNames = (technicianIds: string[]) => {
+    const names = technicianIds
+      .map(id => technicians.find(tech => tech.id === id)?.name)
+      .filter(Boolean);
+    return names.length > 0 ? names.join(", ") : "Nenhum técnico atribuído";
+  };
 
   const reallocationMutation = useMutation({
     mutationFn: async (data: { serviceOrderIds: string[]; newTeamId: string }) => {
@@ -112,7 +123,7 @@ export default function ReallocationModal({ open, onOpenChange, teamId }: Reallo
             <div className="flex flex-col lg:flex-row lg:items-center justify-between mb-4 space-y-3 lg:space-y-0">
               <div>
                 <h4 className="text-lg font-medium text-white mb-2">
-                  Equipe Atual: {currentTeam.name}
+                  Equipe Atual: {getTechnicianNames(currentTeam.technicianIds)}
                 </h4>
                 <p className="text-sm text-muted-foreground">
                   Selecione as ordens de serviço para realocar:
@@ -229,7 +240,7 @@ export default function ReallocationModal({ open, onOpenChange, teamId }: Reallo
               <SelectContent>
                 {availableTeams.map((team) => (
                   <SelectItem key={team.id} value={team.id}>
-                    {team.name} ({team.boxNumber})
+                    {getTechnicianNames(team.technicianIds)} ({team.boxNumber})
                   </SelectItem>
                 ))}
               </SelectContent>

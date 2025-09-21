@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import Header from "@/components/dashboard/header";
 import AlertsSection from "@/components/dashboard/alerts-section";
 import SearchActions from "@/components/dashboard/search-actions";
@@ -15,9 +16,12 @@ import DayServicesModal from "@/components/modals/day-services-modal";
 import AddServiceModal from "@/components/modals/add-service-modal";
 import TeamServicesModal from "@/components/modals/team-services-modal";
 import EditDayServicesModal from "@/components/modals/edit-day-services-modal";
+import ManageTechniciansModal from "@/components/modals/manage-technicians-modal";
+import TechnicianServicesReallocationModal from "@/components/modals/technician-services-reallocation-modal";
 import ReminderAlerts from "@/components/dashboard/reminder-alerts";
 
 export default function Dashboard() {
+  const queryClient = useQueryClient();
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [generatedReportModalOpen, setGeneratedReportModalOpen] = useState(false);
   const [reallocationModalOpen, setReallocationModalOpen] = useState(false);
@@ -28,10 +32,21 @@ export default function Dashboard() {
   const [addServiceModalOpen, setAddServiceModalOpen] = useState(false);
   const [teamServicesModalOpen, setTeamServicesModalOpen] = useState(false);
   const [editDayServicesModalOpen, setEditDayServicesModalOpen] = useState(false);
+  const [manageTechniciansModalOpen, setManageTechniciansModalOpen] = useState(false);
+  const [technicianServicesReallocationModalOpen, setTechnicianServicesReallocationModalOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
   const [selectedTeamIdForService, setSelectedTeamIdForService] = useState<string>("");
   const [selectedTeamIdForServices, setSelectedTeamIdForServices] = useState<string>("");
   const [selectedTeamNameForServices, setSelectedTeamNameForServices] = useState<string>("");
+  const [selectedTeamIdForTechnicians, setSelectedTeamIdForTechnicians] = useState<string>("");
+  const [technicianWithServices, setTechnicianWithServices] = useState<{
+    id: string;
+    name: string;
+    serviceOrders: any[];
+    action: 'remove' | 'move';
+    targetTeamId?: string;
+    sourceTeamId: string;
+  } | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date | undefined>();
   const [selectedDateForServices, setSelectedDateForServices] = useState<Date | undefined>();
   const [generatedReportContent, setGeneratedReportContent] = useState<string>("");
@@ -65,6 +80,104 @@ export default function Dashboard() {
     setSelectedTeamIdForServices(teamId);
     setSelectedTeamNameForServices(teamName);
     setTeamServicesModalOpen(true);
+  };
+
+  const handleManageTechnicians = (teamId: string) => {
+    setSelectedTeamIdForTechnicians(teamId);
+    setManageTechniciansModalOpen(true);
+  };
+
+  const handleTechnicianWithServices = (
+    technicianId: string, 
+    technicianName: string, 
+    serviceOrders: any[], 
+    action: 'remove' | 'move', 
+    targetTeamId?: string
+  ) => {
+    setTechnicianWithServices({
+      id: technicianId,
+      name: technicianName,
+      serviceOrders,
+      action,
+      targetTeamId,
+      sourceTeamId: selectedTeamIdForTechnicians
+    });
+    setTechnicianServicesReallocationModalOpen(true);
+  };
+
+  const handleCompleteReallocation = async () => {
+    if (!technicianWithServices) return;
+
+    const { id: technicianId, action, targetTeamId, sourceTeamId } = technicianWithServices;
+
+    try {
+      if (action === 'remove') {
+        // Remover técnico da equipe atual
+        const response = await fetch(`/api/teams/${sourceTeamId}`);
+        const sourceTeam = await response.json();
+        
+        const newTechnicianIds = sourceTeam.technicianIds.filter((id: string) => id !== technicianId);
+        
+        await fetch(`/api/teams/${sourceTeamId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: sourceTeam.name,
+            boxNumber: sourceTeam.boxNumber,
+            notes: sourceTeam.notes,
+            technicianIds: newTechnicianIds
+          })
+        });
+      } else if (action === 'move' && targetTeamId) {
+        // Mover técnico da equipe atual para a equipe de destino
+        const [sourceResponse, targetResponse] = await Promise.all([
+          fetch(`/api/teams/${sourceTeamId}`),
+          fetch(`/api/teams/${targetTeamId}`)
+        ]);
+        
+        const sourceTeam = await sourceResponse.json();
+        const targetTeam = await targetResponse.json();
+        
+        const sourceNewIds = sourceTeam.technicianIds.filter((id: string) => id !== technicianId);
+        const targetNewIds = [...targetTeam.technicianIds, technicianId];
+        
+        await Promise.all([
+          fetch(`/api/teams/${sourceTeamId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: sourceTeam.name,
+              boxNumber: sourceTeam.boxNumber,
+              notes: sourceTeam.notes,
+              technicianIds: sourceNewIds
+            })
+          }),
+          fetch(`/api/teams/${targetTeamId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: targetTeam.name,
+              boxNumber: targetTeam.boxNumber,
+              notes: targetTeam.notes,
+              technicianIds: targetNewIds
+            })
+          })
+        ]);
+      }
+
+      // Invalidar queries para atualizar a interface
+      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/service-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/technicians"] });
+
+      // Fechar modais e limpar estado
+      setTechnicianServicesReallocationModalOpen(false);
+      setTechnicianWithServices(null);
+      setManageTechniciansModalOpen(true); // Reabrir o modal de gerenciamento
+      
+    } catch (error) {
+      console.error('Erro ao completar realocação:', error);
+    }
   };
 
   const handleReportGenerated = (content: string, name?: string, date?: string, shift?: string) => {
@@ -117,6 +230,7 @@ export default function Dashboard() {
               onReallocate={handleReallocation}
               onAddServiceOrder={handleAddServiceOrder}
               onViewTeamServices={handleViewTeamServices}
+              onManageTechnicians={handleManageTechnicians}
             />
           </div>
           <div className="xl:col-span-1">
@@ -197,6 +311,22 @@ export default function Dashboard() {
         onOpenChange={setEditDayServicesModalOpen}
         selectedDate={reportDate}
         onServicesUpdated={handleServicesUpdated}
+      />
+
+      <ManageTechniciansModal
+        open={manageTechniciansModalOpen}
+        onOpenChange={setManageTechniciansModalOpen}
+        teamId={selectedTeamIdForTechnicians}
+        onTechnicianWithServices={handleTechnicianWithServices}
+      />
+
+      <TechnicianServicesReallocationModal
+        open={technicianServicesReallocationModalOpen}
+        onOpenChange={setTechnicianServicesReallocationModalOpen}
+        technicianId={technicianWithServices?.id || ""}
+        technicianName={technicianWithServices?.name || ""}
+        serviceOrders={technicianWithServices?.serviceOrders || []}
+        onCompleteReallocation={handleCompleteReallocation}
       />
 
       <ReminderAlerts />

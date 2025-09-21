@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Team, City, Neighborhood } from "@shared/schema";
+import type { Team, City, Neighborhood, Technician } from "@shared/schema";
 import { z } from "zod";
 
 interface AddServiceModalProps {
@@ -64,6 +64,10 @@ export default function AddServiceModal({ open, onOpenChange, teamId }: AddServi
     queryKey: ["/api/teams"]
   });
 
+  const { data: technicians = [] } = useQuery<Technician[]>({
+    queryKey: ["/api/technicians"]
+  });
+
   const { data: cities = [] } = useQuery<City[]>({
     queryKey: ["/api/cities"]
   });
@@ -77,6 +81,13 @@ export default function AddServiceModal({ open, onOpenChange, teamId }: AddServi
   });
 
   const selectedTeam = teams.find(team => team.id === teamId);
+
+  const getTechnicianNames = (technicianIds: string[]) => {
+    const names = technicianIds
+      .map(id => technicians.find(tech => tech.id === id)?.name)
+      .filter(Boolean);
+    return names.length > 0 ? names.join(", ") : "Nenhum técnico atribuído";
+  };
 
   const createServiceOrderMutation = useMutation({
     mutationFn: async (data: AddServiceOrderInput) => {
@@ -162,7 +173,7 @@ export default function AddServiceModal({ open, onOpenChange, teamId }: AddServi
                 <Plus className="h-4 w-4" />
                 <span className="font-medium">Adicionando OS para:</span>
               </div>
-              <p className="text-white mt-1">{selectedTeam.name} - {selectedTeam.boxNumber}</p>
+              <p className="text-white mt-1">{getTechnicianNames(selectedTeam.technicianIds)} - {selectedTeam.boxNumber}</p>
             </div>
           )}
 
