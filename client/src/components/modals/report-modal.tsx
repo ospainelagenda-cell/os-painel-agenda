@@ -29,6 +29,7 @@ interface BoxData {
   boxNumber: string;
   technicianIds: string[];
   teamId?: string;
+  serviceOrders: NewServiceOrder[];
 }
 
 export default function ReportModal({ open, onOpenChange, onReportGenerated }: ReportModalProps) {
@@ -37,7 +38,6 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
   const [shift, setShift] = useState("");
   const [boxes, setBoxes] = useState<BoxData[]>([]);
   const [selectedBoxIndex, setSelectedBoxIndex] = useState<number | null>(null);
-  const [newServiceOrders, setNewServiceOrders] = useState<NewServiceOrder[]>([]);
   const [editingBoxIndex, setEditingBoxIndex] = useState<number | null>(null);
   const [editingBoxValue, setEditingBoxValue] = useState("");
   const [technicianModalOpen, setTechnicianModalOpen] = useState(false);
@@ -85,7 +85,7 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
 
   const addBox = () => {
     const newBoxNumber = `caixa-${boxes.length + 1}`;
-    setBoxes(prev => [...prev, { boxNumber: newBoxNumber, technicianIds: [] }]);
+    setBoxes(prev => [...prev, { boxNumber: newBoxNumber, technicianIds: [], serviceOrders: [] }]);
   };
 
   const removeBox = (index: number) => {
@@ -136,7 +136,6 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     setShift("");
     setBoxes([]);
     setSelectedBoxIndex(null);
-    setNewServiceOrders([]);
     setEditingBoxIndex(null);
     setEditingBoxValue("");
     setTechnicianModalOpen(false);
@@ -196,22 +195,34 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     }
 
     // Create new service orders with proper round-robin assignment
-    const validOrders = newServiceOrders.filter(order => order.code && order.type);
+    const allValidOrders: (NewServiceOrder & { boxIndex: number })[] = [];
+    
+    // Collect all valid orders from all boxes
+    boxes.forEach((box, boxIndex) => {
+      const validBoxOrders = box.serviceOrders.filter(order => order.code && order.type);
+      validBoxOrders.forEach(order => {
+        allValidOrders.push({ ...order, boxIndex });
+      });
+    });
     const availableBoxes = boxes.filter(box => box.boxNumber.trim() !== "" && box.technicianIds.length > 0);
     
-    if (validOrders.length > 0 && availableBoxes.length === 0) {
+    if (allValidOrders.length > 0 && availableBoxes.length === 0) {
       toast({ title: "Erro: Nenhuma caixa configurada para atribuir as ordens de serviço", variant: "destructive" });
       return;
     }
     
-    let assignmentIndex = 0;
-    for (const order of validOrders) {
+    for (const orderWithBox of allValidOrders) {
+      const { boxIndex, ...order } = orderWithBox;
       try {
-        // Calcular atribuição round-robin
-        const selectedBoxIndex = assignmentIndex % availableBoxes.length;
-        const selectedBox = availableBoxes[selectedBoxIndex];
-        const technicianIndex = Math.floor(assignmentIndex / availableBoxes.length) % selectedBox.technicianIds.length;
-        const selectedTechnicianId = selectedBox.technicianIds[technicianIndex];
+        // Use a specific box for this order
+        const selectedBox = boxes[boxIndex];
+        if (!selectedBox || selectedBox.technicianIds.length === 0) {
+          console.warn(`Caixa ${boxIndex} não tem técnicos atribuídos, pulando ordem ${order.code}`);
+          continue;
+        }
+        
+        // Select first technician from the specific box (you can modify this logic as needed)
+        const selectedTechnicianId = selectedBox.technicianIds[0];
         
         // Encontrar o team do técnico selecionado
         const selectedTechnician = technicians.find(t => t.id === selectedTechnicianId);
@@ -234,9 +245,6 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
       } catch (error) {
         console.error("Error creating service order:", error);
         toast({ title: `Erro ao criar ordem ${order.code}`, variant: "destructive" });
-      } finally {
-        // Incrementar índice mesmo se a mutação falhar para evitar reutilizar o mesmo técnico
-        assignmentIndex++;
       }
     }
 
@@ -253,7 +261,7 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     };
 
     let content = `Serviços da Agenda: ${formatDate(reportDate)} - TURNO: ${shift.toUpperCase()}\n`;
-    content += "-".repeat(57) + "\n";
+    content += "-".repeat(57) + "\n\n";
 
     // Agrupar por Caixa → Técnicos → Service Orders
     validBoxes.forEach(box => {
@@ -264,22 +272,23 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
       );
       
       if (boxOrders.length > 0) {
-        content += `CAIXA ${box.boxNumber}:\n`;
-        
-        // Agrupar ordens por técnico
-        box.technicianIds.forEach(technicianId => {
-          const technicianOrders = boxOrders.filter(order => order.technicianId === technicianId);
-          
-          if (technicianOrders.length > 0) {
-            // Encontrar nome do técnico
+        // Encontrar nomes dos técnicos desta caixa
+        const technicianNames = box.technicianIds
+          .map(technicianId => {
             const technician = technicians.find(t => t.id === technicianId);
-            const technicianName = technician ? technician.name : `Técnico ${technicianId}`;
-            
-            content += `  ${technicianName}:\n`;
-            technicianOrders.forEach(order => {
-              content += `    - ${order.code} ${order.type}\n`;
-            });
-          }
+            return technician ? technician.name.toUpperCase() : `TÉCNICO ${technicianId}`;
+          })
+          .join(' E ');
+        
+        // Extrair número da caixa e formatar com zero à esquerda
+        const numPart = box.boxNumber.match(/\d+/)?.[0] ?? box.boxNumber;
+        const boxNumberFormatted = numPart.padStart(2, '0');
+        
+        content += `${technicianNames}: (CAIXA - ${boxNumberFormatted})\n`;
+        
+        // Coletar todas as ordens desta caixa (de todos os técnicos)
+        boxOrders.forEach(order => {
+          content += `- ${order.code} ${order.type}\n`;
         });
         
         content += "-".repeat(57) + "\n";
@@ -299,23 +308,56 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
   };
 
   const addNewServiceOrder = () => {
-    setNewServiceOrders(prev => [...prev, { 
-      code: "", 
-      type: "", 
-      alert: "", 
-      cityId: "", 
-      neighborhoodId: "" 
-    }]);
+    if (selectedBoxIndex === null) {
+      toast({ title: "Selecione uma caixa para adicionar ordens de serviço", variant: "destructive" });
+      return;
+    }
+    
+    setBoxes(prev => prev.map((box, index) => {
+      if (index === selectedBoxIndex) {
+        return {
+          ...box,
+          serviceOrders: [...box.serviceOrders, {
+            code: "",
+            type: "",
+            alert: "",
+            cityId: "",
+            neighborhoodId: ""
+          }]
+        };
+      }
+      return box;
+    }));
   };
 
-  const updateServiceOrder = (index: number, field: keyof NewServiceOrder, value: string) => {
-    setNewServiceOrders(prev => 
-      prev.map((order, i) => i === index ? { ...order, [field]: value } : order)
-    );
+  const updateServiceOrder = (orderIndex: number, field: keyof NewServiceOrder, value: string) => {
+    if (selectedBoxIndex === null) return;
+    
+    setBoxes(prev => prev.map((box, boxIndex) => {
+      if (boxIndex === selectedBoxIndex) {
+        return {
+          ...box,
+          serviceOrders: box.serviceOrders.map((order, i) => 
+            i === orderIndex ? { ...order, [field]: value } : order
+          )
+        };
+      }
+      return box;
+    }));
   };
 
-  const removeServiceOrder = (index: number) => {
-    setNewServiceOrders(prev => prev.filter((_, i) => i !== index));
+  const removeServiceOrder = (orderIndex: number) => {
+    if (selectedBoxIndex === null) return;
+    
+    setBoxes(prev => prev.map((box, boxIndex) => {
+      if (boxIndex === selectedBoxIndex) {
+        return {
+          ...box,
+          serviceOrders: box.serviceOrders.filter((_, i) => i !== orderIndex)
+        };
+      }
+      return box;
+    }));
   };
 
   const handleModalClose = (isOpen: boolean) => {
@@ -576,20 +618,27 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
             <div className="flex items-center justify-between mb-4">
               <Label className="text-lg font-medium text-white">
                 Ordens de Serviço
+                {selectedBoxIndex !== null && (
+                  <span className="text-sm text-muted-foreground ml-2">
+                    para {boxes[selectedBoxIndex]?.boxNumber}
+                  </span>
+                )}
               </Label>
               <Button
                 type="button"
                 className="glass-button px-3 py-2 rounded-lg text-white text-sm"
                 onClick={addNewServiceOrder}
                 data-testid="button-add-service-order"
+                disabled={selectedBoxIndex === null}
               >
                 <Plus className="mr-1 h-4 w-4" />
                 Adicionar OS
               </Button>
             </div>
             
-            <div className="space-y-3">
-              {newServiceOrders.map((order, index) => (
+            {selectedBoxIndex !== null ? (
+              <div className="space-y-3">
+                {boxes[selectedBoxIndex]?.serviceOrders.map((order, index) => (
                 <div key={index} className="glass-card p-4 rounded-lg space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
@@ -701,14 +750,19 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
                     />
                   </div>
                 </div>
-              ))}
-              
-              {newServiceOrders.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  Nenhuma ordem de serviço adicionada
-                </div>
-              )}
-            </div>
+                ))}
+                
+                {boxes[selectedBoxIndex]?.serviceOrders.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    Nenhuma ordem de serviço adicionada para esta caixa
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                Selecione uma caixa para gerenciar ordens de serviço
+              </div>
+            )}
           </div>
         </div>
 
