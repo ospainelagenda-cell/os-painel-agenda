@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Plus, Trash2, MapPin, Home } from "lucide-react";
+import { X, Plus, Trash2, MapPin, Home, Edit3, Check, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,9 +20,6 @@ interface ReportModalProps {
 interface NewServiceOrder {
   code: string;
   type: string;
-  teamId: string;
-  technicianId: string;
-  boxIndex: string; // Index da caixa selecionada (como string)
   alert: string;
   cityId: string;
   neighborhoodId: string;
@@ -41,6 +38,9 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
   const [boxes, setBoxes] = useState<BoxData[]>([]);
   const [selectedBoxIndex, setSelectedBoxIndex] = useState<number | null>(null);
   const [newServiceOrders, setNewServiceOrders] = useState<NewServiceOrder[]>([]);
+  const [editingBoxIndex, setEditingBoxIndex] = useState<number | null>(null);
+  const [editingBoxValue, setEditingBoxValue] = useState("");
+  const [technicianModalOpen, setTechnicianModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -61,15 +61,17 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
   });
 
   const createServiceOrderMutation = useMutation({
-    mutationFn: async (order: NewServiceOrder) => {
+    mutationFn: async (orderWithAssignment: NewServiceOrder & { technicianId: string; teamId?: string }) => {
       const response = await apiRequest("POST", "/api/service-orders", {
-        code: order.code,
-        type: order.type,
-        teamId: order.teamId || null, // Permitir criação sem team por enquanto
-        technicianId: order.technicianId || null, // Incluir técnico selecionado
-        alert: order.alert || undefined,
+        code: orderWithAssignment.code,
+        type: orderWithAssignment.type,
+        teamId: orderWithAssignment.teamId || null,
+        technicianId: orderWithAssignment.technicianId,
+        alert: orderWithAssignment.alert || undefined,
         scheduledDate: reportDate,
-        status: "Pendente"
+        status: "Pendente",
+        ...(orderWithAssignment.cityId && { cityId: orderWithAssignment.cityId }),
+        ...(orderWithAssignment.neighborhoodId && { neighborhoodId: orderWithAssignment.neighborhoodId })
       });
       return await response.json();
     },
@@ -94,18 +96,38 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
       setSelectedBoxIndex(selectedBoxIndex - 1);
     }
     
-    // Limpar service orders que referenciam boxes removidos ou ajustar índices
-    setNewServiceOrders(prev => prev.map(order => {
-      if (order.boxIndex === "") return order;
-      
-      const orderBoxIndex = Number(order.boxIndex);
-      if (orderBoxIndex === index) {
-        return { ...order, boxIndex: "", technicianId: "" };
-      } else if (orderBoxIndex > index) {
-        return { ...order, boxIndex: (orderBoxIndex - 1).toString() };
+    // Nenhuma limpeza adicional necessária para service orders
+    // já que elas não dependem mais de boxIndex/technicianId
+  };
+
+  const handleEditBoxNumber = (index: number, currentValue: string) => {
+    setEditingBoxIndex(index);
+    setEditingBoxValue(currentValue);
+  };
+
+  const handleSaveBoxNumber = (index: number) => {
+    if (editingBoxValue.trim() === "") {
+      toast({ title: "O número da caixa não pode estar vazio", variant: "destructive" });
+      return;
+    }
+
+    // Verificar se já existe uma caixa com este número
+    const boxExists = boxes.some((box, i) => i !== index && box.boxNumber === editingBoxValue.trim());
+    if (boxExists) {
+      toast({ title: "Já existe uma caixa com este número", variant: "destructive" });
+      return;
+    }
+
+    setBoxes(prev => prev.map((box, i) => {
+      if (i === index) {
+        return { ...box, boxNumber: editingBoxValue.trim() };
       }
-      return order;
+      return box;
     }));
+
+    setEditingBoxIndex(null);
+    setEditingBoxValue("");
+    toast({ title: "Número da caixa atualizado com sucesso" });
   };
 
   const resetModalState = () => {
@@ -115,6 +137,9 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     setBoxes([]);
     setSelectedBoxIndex(null);
     setNewServiceOrders([]);
+    setEditingBoxIndex(null);
+    setEditingBoxValue("");
+    setTechnicianModalOpen(false);
   };
 
   const updateBoxTechnicians = (index: number, technicianIds: string[]) => {
@@ -132,14 +157,8 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
       }
     }));
     
-    // Limpar service orders que referenciam técnicos removidos desta caixa
-    setNewServiceOrders(prev => prev.map(order => {
-      if (order.boxIndex === index.toString() && order.technicianId && !technicianIds.includes(order.technicianId)) {
-        // Técnico foi removido da caixa - limpar seleção
-        return { ...order, technicianId: "" };
-      }
-      return order;
-    }));
+    // Nenhuma limpeza adicional necessária para service orders
+    // já que elas não dependem mais de boxIndex/technicianId
   };
 
 
@@ -176,23 +195,48 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
       return;
     }
 
-    // Create new service orders first
-    for (const order of newServiceOrders) {
-      if (order.code && order.type && order.technicianId) {
-        // Validar integridade: verificar se box e técnico são válidos
-        const boxIndex = Number(order.boxIndex);
-        const selectedBox = boxIndex >= 0 && boxIndex < boxes.length ? boxes[boxIndex] : undefined;
+    // Create new service orders with proper round-robin assignment
+    const validOrders = newServiceOrders.filter(order => order.code && order.type);
+    const availableBoxes = boxes.filter(box => box.boxNumber.trim() !== "" && box.technicianIds.length > 0);
+    
+    if (validOrders.length > 0 && availableBoxes.length === 0) {
+      toast({ title: "Erro: Nenhuma caixa configurada para atribuir as ordens de serviço", variant: "destructive" });
+      return;
+    }
+    
+    let assignmentIndex = 0;
+    for (const order of validOrders) {
+      try {
+        // Calcular atribuição round-robin
+        const selectedBoxIndex = assignmentIndex % availableBoxes.length;
+        const selectedBox = availableBoxes[selectedBoxIndex];
+        const technicianIndex = Math.floor(assignmentIndex / availableBoxes.length) % selectedBox.technicianIds.length;
+        const selectedTechnicianId = selectedBox.technicianIds[technicianIndex];
         
-        if (!selectedBox || !selectedBox.technicianIds.includes(order.technicianId)) {
-          console.warn(`Skipping invalid service order: ${order.code} - box or technician invalid`);
-          continue;
+        // Encontrar o team do técnico selecionado
+        const selectedTechnician = technicians.find(t => t.id === selectedTechnicianId);
+        const teamForTechnician = teams.find(team => team.technicianIds.includes(selectedTechnicianId));
+        
+        // Avisar se nenhum team foi encontrado para o técnico
+        if (!teamForTechnician) {
+          console.warn(`Nenhum team encontrado para o técnico ${selectedTechnician?.name || selectedTechnicianId}`);
+          toast({ 
+            title: `Aviso: Técnico ${selectedTechnician?.name || 'desconhecido'} não pertence a nenhum team`, 
+            variant: "default" 
+          });
         }
         
-        try {
-          await createServiceOrderMutation.mutateAsync(order);
-        } catch (error) {
-          console.error("Error creating service order:", error);
-        }
+        await createServiceOrderMutation.mutateAsync({
+          ...order,
+          technicianId: selectedTechnicianId,
+          teamId: teamForTechnician?.id
+        });
+      } catch (error) {
+        console.error("Error creating service order:", error);
+        toast({ title: `Erro ao criar ordem ${order.code}`, variant: "destructive" });
+      } finally {
+        // Incrementar índice mesmo se a mutação falhar para evitar reutilizar o mesmo técnico
+        assignmentIndex++;
       }
     }
 
@@ -258,9 +302,6 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     setNewServiceOrders(prev => [...prev, { 
       code: "", 
       type: "", 
-      teamId: "", 
-      technicianId: "",
-      boxIndex: "", // "" significa nenhuma caixa selecionada
       alert: "", 
       cityId: "", 
       neighborhoodId: "" 
@@ -369,27 +410,77 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
             <div className="flex flex-wrap gap-2 mb-6">
               {boxes.map((box, index) => (
                 <div key={index} className="relative">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedBoxIndex(selectedBoxIndex === index ? null : index)}
-                    className={`px-4 py-2 rounded-full border text-sm font-medium transition-all ${
-                      selectedBoxIndex === index
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-secondary text-white border-border hover:border-blue-400'
-                    }`}
-                    data-testid={`button-box-${index}`}
-                  >
-                    {box.boxNumber}
-                  </button>
-                  {boxes.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeBox(index)}
-                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
-                      data-testid={`button-remove-box-${index}`}
-                    >
-                      ×
-                    </button>
+                  {editingBoxIndex === index ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="text"
+                        value={editingBoxValue}
+                        onChange={(e) => setEditingBoxValue(e.target.value)}
+                        className="px-3 py-2 rounded-full border bg-secondary text-white border-border text-sm font-medium w-24 focus:outline-none focus:border-blue-400"
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            handleSaveBoxNumber(index);
+                          } else if (e.key === 'Escape') {
+                            setEditingBoxIndex(null);
+                            setEditingBoxValue("");
+                          }
+                        }}
+                        autoFocus
+                        data-testid={`input-edit-box-${index}`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveBoxNumber(index)}
+                        className="w-6 h-6 bg-green-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-green-600 ml-1"
+                        data-testid={`button-save-box-${index}`}
+                      >
+                        <Check className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingBoxIndex(null);
+                          setEditingBoxValue("");
+                        }}
+                        className="w-6 h-6 bg-gray-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-gray-600"
+                        data-testid={`button-cancel-edit-box-${index}`}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedBoxIndex(selectedBoxIndex === index ? null : index)}
+                        className={`px-4 py-2 rounded-full border text-sm font-medium transition-all ${
+                          selectedBoxIndex === index
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-secondary text-white border-border hover:border-blue-400'
+                        }`}
+                        data-testid={`button-box-${index}`}
+                      >
+                        {box.boxNumber}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleEditBoxNumber(index, box.boxNumber)}
+                        className="absolute -top-1 -left-1 w-5 h-5 bg-blue-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-blue-600"
+                        data-testid={`button-edit-box-${index}`}
+                      >
+                        <Edit3 className="h-3 w-3" />
+                      </button>
+                      {boxes.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeBox(index)}
+                          className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
+                          data-testid={`button-remove-box-${index}`}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </>
                   )}
                 </div>
               ))}
@@ -413,54 +504,53 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
             {selectedBoxIndex !== null ? (
               <div className="space-y-3">
                 <div className="glass-card p-4 rounded-lg">
-                  <Label className="block text-sm font-medium text-muted-foreground mb-3">
-                    Técnicos para {boxes[selectedBoxIndex]?.boxNumber}:
-                  </Label>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {technicians.map((technician) => {
-                      const isSelected = boxes[selectedBoxIndex]?.technicianIds.includes(technician.id);
-                      const isInOtherBox = boxes.some((otherBox, otherIndex) => 
-                        otherIndex !== selectedBoxIndex && otherBox.technicianIds.includes(technician.id)
-                      );
-                      const isDisabled = isInOtherBox && !isSelected;
-                      
-                      return (
-                        <label 
-                          key={technician.id} 
-                          className={`flex items-center space-x-3 p-3 rounded-lg border transition-all cursor-pointer ${
-                            isSelected 
-                              ? 'bg-blue-500/20 border-blue-500 text-white' 
-                              : isDisabled
-                                ? 'bg-secondary/30 border-border/30 text-muted-foreground cursor-not-allowed'
-                                : 'bg-secondary/50 border-border hover:border-blue-400 text-white hover:bg-secondary/70'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            disabled={isDisabled}
-                            onChange={(e) => {
-                              const currentTechnicians = boxes[selectedBoxIndex]?.technicianIds || [];
-                              if (e.target.checked) {
-                                updateBoxTechnicians(selectedBoxIndex, [...currentTechnicians, technician.id]);
-                              } else {
-                                updateBoxTechnicians(selectedBoxIndex, currentTechnicians.filter(id => id !== technician.id));
-                              }
-                            }}
-                            className="rounded bg-secondary border-border text-primary focus:ring-primary focus:ring-offset-0 disabled:cursor-not-allowed"
-                            data-testid={`checkbox-technician-${selectedBoxIndex}-${technician.id}`}
-                          />
-                          <span className="text-sm font-medium">
-                            {technician.name}
-                            {isInOtherBox && !isSelected && (
-                              <span className="ml-1 text-xs opacity-60">(em outra caixa)</span>
-                            )}
-                          </span>
-                        </label>
-                      );
-                    })}
+                  <div className="flex items-center justify-between mb-3">
+                    <Label className="text-sm font-medium text-muted-foreground">
+                      Técnicos para {boxes[selectedBoxIndex]?.boxNumber}:
+                    </Label>
+                    <Button
+                      type="button"
+                      className="glass-button px-3 py-1.5 rounded-lg text-white text-xs"
+                      onClick={() => setTechnicianModalOpen(true)}
+                      data-testid={`button-manage-technicians-${selectedBoxIndex}`}
+                    >
+                      <Users className="mr-1 h-3 w-3" />
+                      Gerenciar
+                    </Button>
                   </div>
+                  
+                  {boxes[selectedBoxIndex]?.technicianIds.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {boxes[selectedBoxIndex]?.technicianIds.map((technicianId) => {
+                        const technician = technicians.find(t => t.id === technicianId);
+                        if (!technician) return null;
+                        
+                        return (
+                          <div 
+                            key={technician.id} 
+                            className="flex items-center justify-between p-2 rounded-lg bg-blue-500/20 border border-blue-500 text-white"
+                          >
+                            <span className="text-sm font-medium">{technician.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentTechnicians = boxes[selectedBoxIndex]?.technicianIds || [];
+                                updateBoxTechnicians(selectedBoxIndex, currentTechnicians.filter(id => id !== technician.id));
+                              }}
+                              className="w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600 ml-2"
+                              data-testid={`button-remove-technician-${selectedBoxIndex}-${technician.id}`}
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 text-muted-foreground text-sm">
+                      Nenhum técnico selecionado para esta caixa
+                    </div>
+                  )}
 
                   {boxes[selectedBoxIndex]?.technicianIds.length > 0 && (
                     <div className="mt-4 p-3 bg-secondary/30 rounded-lg">
@@ -501,7 +591,7 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
             <div className="space-y-3">
               {newServiceOrders.map((order, index) => (
                 <div key={index} className="glass-card p-4 rounded-lg space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
                       <Label className="block text-xs font-medium text-muted-foreground mb-1">
                         Código OS
@@ -532,83 +622,6 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
                           <SelectItem value="SEM CONEXÃO">SEM CONEXÃO</SelectItem>
                           <SelectItem value="LENTIDÃO">LENTIDÃO</SelectItem>
                           <SelectItem value="CONFG. ROTEADOR">CONFG. ROTEADOR</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <Label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Caixa
-                      </Label>
-                      <Select 
-                        value={order.boxIndex} 
-                        onValueChange={(value) => {
-                          updateServiceOrder(index, 'boxIndex', value);
-                          // Reset técnico quando mudar de caixa
-                          updateServiceOrder(index, 'technicianId', "");
-                        }}
-                      >
-                        <SelectTrigger className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-white text-sm">
-                          <SelectValue placeholder="Selecione uma caixa" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {boxes.map((box, originalIndex) => {
-                            // Só renderizar boxes válidos, mas manter índices originais
-                            if (box.boxNumber.trim() !== "" && box.technicianIds.length > 0) {
-                              return (
-                                <SelectItem key={originalIndex} value={originalIndex.toString()}>
-                                  {box.boxNumber}
-                                </SelectItem>
-                              );
-                            }
-                            return null;
-                          })}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div>
-                      <Label className="block text-xs font-medium text-muted-foreground mb-1">
-                        Técnico
-                      </Label>
-                      <Select 
-                        value={order.technicianId} 
-                        onValueChange={(value) => updateServiceOrder(index, 'technicianId', value)}
-                        disabled={order.boxIndex === ""}
-                      >
-                        <SelectTrigger className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-white text-sm">
-                          <SelectValue placeholder={order.boxIndex === "" ? "Primeiro selecione uma caixa" : "Selecione um técnico"} />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(() => {
-                            if (order.boxIndex === "") {
-                              return (
-                                <SelectItem value="no-technicians" disabled>
-                                  Selecione uma caixa primeiro
-                                </SelectItem>
-                              );
-                            }
-                            
-                            const selectedBoxIndex = Number(order.boxIndex);
-                            const selectedBox = selectedBoxIndex >= 0 && selectedBoxIndex < boxes.length ? boxes[selectedBoxIndex] : undefined;
-                            
-                            if (!selectedBox) {
-                              return (
-                                <SelectItem value="invalid-box" disabled>
-                                  Caixa selecionada inválida
-                                </SelectItem>
-                              );
-                            }
-                            
-                            return selectedBox.technicianIds.map((technicianId) => {
-                              const technician = technicians.find(t => t.id === technicianId);
-                              return technician ? (
-                                <SelectItem key={technician.id} value={technician.id}>
-                                  {technician.name}
-                                </SelectItem>
-                              ) : null;
-                            });
-                          })()}
                         </SelectContent>
                       </Select>
                     </div>
@@ -717,6 +730,89 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
           </Button>
         </div>
       </DialogContent>
+
+      {/* Modal de Seleção de Técnicos */}
+      <Dialog open={technicianModalOpen} onOpenChange={setTechnicianModalOpen}>
+        <DialogContent className="bg-primary border border-border/30 max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Selecionar Técnicos para {selectedBoxIndex !== null ? boxes[selectedBoxIndex]?.boxNumber : ""}
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {technicians.map((technician) => {
+                const isSelected = selectedBoxIndex !== null && boxes[selectedBoxIndex]?.technicianIds.includes(technician.id);
+                const isInOtherBox = boxes.some((otherBox, otherIndex) => 
+                  otherIndex !== selectedBoxIndex && otherBox.technicianIds.includes(technician.id)
+                );
+                const isDisabled = isInOtherBox && !isSelected;
+                
+                return (
+                  <label 
+                    key={technician.id} 
+                    className={`flex items-center space-x-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                      isSelected 
+                        ? 'bg-blue-500/20 border-blue-500 text-white' 
+                        : isDisabled
+                          ? 'bg-secondary/30 border-border/30 text-muted-foreground cursor-not-allowed'
+                          : 'bg-secondary/50 border-border hover:border-blue-400 text-white hover:bg-secondary/70'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      disabled={isDisabled}
+                      onChange={(e) => {
+                        if (selectedBoxIndex === null) return;
+                        const currentTechnicians = boxes[selectedBoxIndex]?.technicianIds || [];
+                        if (e.target.checked) {
+                          updateBoxTechnicians(selectedBoxIndex, [...currentTechnicians, technician.id]);
+                        } else {
+                          updateBoxTechnicians(selectedBoxIndex, currentTechnicians.filter(id => id !== technician.id));
+                        }
+                      }}
+                      className="rounded bg-secondary border-border text-primary focus:ring-primary focus:ring-offset-0 disabled:cursor-not-allowed"
+                      data-testid={`modal-checkbox-technician-${selectedBoxIndex}-${technician.id}`}
+                    />
+                    <span className="text-sm font-medium">
+                      {technician.name}
+                      {isInOtherBox && !isSelected && (
+                        <span className="ml-1 text-xs opacity-60">(em outra caixa)</span>
+                      )}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+
+            {selectedBoxIndex !== null && boxes[selectedBoxIndex]?.technicianIds.length > 0 && (
+              <div className="mt-4 p-3 bg-secondary/30 rounded-lg">
+                <Label className="text-sm text-primary font-medium">Técnicos Selecionados:</Label>
+                <div className="text-sm text-white mt-1">
+                  {technicians
+                    .filter(t => boxes[selectedBoxIndex]?.technicianIds.includes(t.id))
+                    .map(t => t.name)
+                    .join(", ")}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3 pt-4 border-t border-border/30">
+              <Button
+                type="button"
+                className="glass-button px-4 py-2 rounded-lg text-white"
+                onClick={() => setTechnicianModalOpen(false)}
+                data-testid="button-close-technician-modal"
+              >
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }
