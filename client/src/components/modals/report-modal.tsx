@@ -594,17 +594,6 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
                     </div>
                   )}
 
-                  {boxes[selectedBoxIndex]?.technicianIds.length > 0 && (
-                    <div className="mt-4 p-3 bg-secondary/30 rounded-lg">
-                      <Label className="text-sm text-primary font-medium">Resumo:</Label>
-                      <div className="text-sm text-white mt-1">
-                        {technicians
-                          .filter(t => boxes[selectedBoxIndex]?.technicianIds.includes(t.id))
-                          .map(t => t.name.toUpperCase())
-                          .join(" E ")} : {boxes[selectedBoxIndex]?.boxNumber}
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             ) : (
@@ -787,10 +776,10 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
 
       {/* Modal de Seleção de Técnicos */}
       <Dialog open={technicianModalOpen} onOpenChange={setTechnicianModalOpen}>
-        <DialogContent className="bg-primary border border-border/30 max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogContent className="glass-card border-border/30 text-white max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
-              <Users className="h-5 w-5" />
+              <Users className="h-5 w-5 text-green-400" />
               Selecionar Técnicos para {selectedBoxIndex !== null ? boxes[selectedBoxIndex]?.boxNumber : ""}
             </DialogTitle>
           </DialogHeader>
@@ -807,12 +796,12 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
                 return (
                   <label 
                     key={technician.id} 
-                    className={`flex items-center space-x-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                    className={`glass-card flex items-center space-x-3 p-4 rounded-lg border transition-all cursor-pointer ${
                       isSelected 
-                        ? 'bg-blue-500/20 border-blue-500 text-white' 
+                        ? 'border-primary/60 bg-primary/20 text-white shadow-lg shadow-primary/10' 
                         : isDisabled
-                          ? 'bg-secondary/30 border-border/30 text-muted-foreground cursor-not-allowed'
-                          : 'bg-secondary/50 border-border hover:border-blue-400 text-white hover:bg-secondary/70'
+                          ? 'border-border/20 bg-secondary/20 text-muted-foreground cursor-not-allowed opacity-50'
+                          : 'border-border/30 hover:border-primary/40 text-white hover:bg-white/5 hover:shadow-md'
                     }`}
                   >
                     <input
@@ -828,13 +817,14 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
                           updateBoxTechnicians(selectedBoxIndex, currentTechnicians.filter(id => id !== technician.id));
                         }
                       }}
-                      className="rounded bg-secondary border-border text-primary focus:ring-primary focus:ring-offset-0 disabled:cursor-not-allowed"
+                      className="w-4 h-4 rounded border-border/40 bg-secondary/50 text-primary focus:ring-primary/50 focus:ring-offset-0 disabled:cursor-not-allowed"
                       data-testid={`modal-checkbox-technician-${selectedBoxIndex}-${technician.id}`}
                     />
-                    <span className="text-sm font-medium">
+                    <Users className="h-4 w-4 text-green-400 flex-shrink-0" />
+                    <span className="text-sm font-medium flex-1">
                       {technician.name}
                       {isInOtherBox && !isSelected && (
-                        <span className="ml-1 text-xs opacity-60">(em outra caixa)</span>
+                        <span className="ml-2 text-xs opacity-60 text-yellow-400">(em outra caixa)</span>
                       )}
                     </span>
                   </label>
@@ -843,24 +833,32 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
             </div>
 
             {selectedBoxIndex !== null && boxes[selectedBoxIndex]?.technicianIds.length > 0 && (
-              <div className="mt-4 p-3 bg-secondary/30 rounded-lg">
-                <Label className="text-sm text-primary font-medium">Técnicos Selecionados:</Label>
-                <div className="text-sm text-white mt-1">
+              <div className="glass-card p-4 rounded-lg border border-border/30">
+                <Label className="text-sm text-primary font-medium flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Técnicos Selecionados:
+                </Label>
+                <div className="text-sm text-white mt-2 flex flex-wrap gap-2">
                   {technicians
                     .filter(t => boxes[selectedBoxIndex]?.technicianIds.includes(t.id))
-                    .map(t => t.name)
-                    .join(", ")}
+                    .map(t => (
+                      <span key={t.id} className="inline-flex items-center gap-1 px-2 py-1 bg-primary/20 rounded-md text-xs border border-primary/30">
+                        <Users className="h-3 w-3 text-green-400" />
+                        {t.name}
+                      </span>
+                    ))}
                 </div>
               </div>
             )}
 
-            <div className="flex justify-end space-x-3 pt-4 border-t border-border/30">
+            <div className="flex justify-end space-x-3 pt-4 border-t border-border/20">
               <Button
                 type="button"
-                className="glass-button px-4 py-2 rounded-lg text-white"
+                className="glass-button hover:bg-white/10 border border-border/30 px-6 py-2 rounded-lg text-white transition-all duration-200"
                 onClick={() => setTechnicianModalOpen(false)}
                 data-testid="button-close-technician-modal"
               >
+                <X className="mr-2 h-4 w-4" />
                 Fechar
               </Button>
             </div>

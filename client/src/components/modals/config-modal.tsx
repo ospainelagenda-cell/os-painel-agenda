@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Download, Upload, Settings, Plus, Trash2, Edit, Check, MapPin, Home, Lock, Key, Shield } from "lucide-react";
+import { X, Download, Upload, Settings, Plus, Trash2, Edit, Check, MapPin, Home, Lock, Key, Shield, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { City, Neighborhood, ServiceType } from "@shared/schema";
+import type { City, Neighborhood, ServiceType, Technician } from "@shared/schema";
 
 interface ConfigModalProps {
   open: boolean;
@@ -37,6 +37,11 @@ export default function ConfigModal({ open, onOpenChange }: ConfigModalProps) {
   const [editingServiceType, setEditingServiceType] = useState<ServiceType | null>(null);
   const [selectedServiceTypes, setSelectedServiceTypes] = useState<string[]>([]);
   
+  // Technicians state
+  const [newTechnicianName, setNewTechnicianName] = useState("");
+  const [editingTechnician, setEditingTechnician] = useState<Technician | null>(null);
+  const [selectedTechnicians, setSelectedTechnicians] = useState<string[]>([]);
+  
   // Security state
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -60,6 +65,10 @@ export default function ConfigModal({ open, onOpenChange }: ConfigModalProps) {
 
   const { data: serviceTypes = [] } = useQuery<ServiceType[]>({
     queryKey: ["/api/service-types"]
+  });
+
+  const { data: technicians = [] } = useQuery<Technician[]>({
+    queryKey: ["/api/technicians"]
   });
 
 
@@ -214,6 +223,60 @@ export default function ConfigModal({ open, onOpenChange }: ConfigModalProps) {
     },
     onError: () => {
       toast({ title: "Erro ao remover tipos de serviço", variant: "destructive" });
+    }
+  });
+
+  // Technicians mutations
+  const createTechnicianMutation = useMutation({
+    mutationFn: async (data: { name: string; cities: string[]; neighborhoods: string[] }) => {
+      const response = await apiRequest("POST", "/api/technicians", {
+        name: data.name,
+        cities: data.cities,
+        neighborhoods: data.neighborhoods
+      });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/technicians"] });
+      setNewTechnicianName("");
+      toast({ title: "Técnico adicionado com sucesso!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao adicionar técnico", variant: "destructive" });
+    }
+  });
+
+  const updateTechnicianMutation = useMutation({
+    mutationFn: async (data: { id: string; name: string; cities: string[]; neighborhoods: string[] }) => {
+      const response = await apiRequest("PUT", `/api/technicians/${data.id}`, {
+        name: data.name,
+        cities: data.cities,
+        neighborhoods: data.neighborhoods
+      });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/technicians"] });
+      setEditingTechnician(null);
+      toast({ title: "Técnico atualizado com sucesso!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao atualizar técnico", variant: "destructive" });
+    }
+  });
+
+  const deleteTechniciansMutation = useMutation({
+    mutationFn: async (technicianIds: string[]) => {
+      const promises = technicianIds.map(id => apiRequest("DELETE", `/api/technicians/${id}`));
+      return Promise.all(promises);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/technicians"] });
+      setSelectedTechnicians([]);
+      toast({ title: "Técnicos removidos com sucesso!" });
+    },
+    onError: () => {
+      toast({ title: "Erro ao remover técnicos", variant: "destructive" });
     }
   });
 
@@ -383,6 +446,43 @@ export default function ConfigModal({ open, onOpenChange }: ConfigModalProps) {
     deleteServiceTypesMutation.mutate(selectedServiceTypes);
   };
 
+  // Technicians handlers
+  const handleAddTechnician = () => {
+    if (!newTechnicianName.trim()) return;
+    createTechnicianMutation.mutate({ 
+      name: newTechnicianName.trim(),
+      cities: [],
+      neighborhoods: []
+    });
+  };
+
+  const handleUpdateTechnician = () => {
+    if (!editingTechnician || !editingTechnician.name.trim()) return;
+    updateTechnicianMutation.mutate({ 
+      id: editingTechnician.id, 
+      name: editingTechnician.name,
+      cities: editingTechnician.cities,
+      neighborhoods: editingTechnician.neighborhoods
+    });
+  };
+
+  const handleTechnicianSelection = (technicianId: string, checked: boolean) => {
+    setSelectedTechnicians(prev => 
+      checked 
+        ? [...prev, technicianId]
+        : prev.filter(id => id !== technicianId)
+    );
+  };
+
+  const handleSelectAllTechnicians = (checked: boolean) => {
+    setSelectedTechnicians(checked ? technicians.map(tech => tech.id) : []);
+  };
+
+  const handleDeleteSelectedTechnicians = () => {
+    if (selectedTechnicians.length === 0) return;
+    deleteTechniciansMutation.mutate(selectedTechnicians);
+  };
+
   const handleExportData = () => {
     // TODO: Implement actual data export functionality
     toast({ title: "Exportação iniciada", description: "Os dados estão sendo preparados para download." });
@@ -466,7 +566,7 @@ export default function ConfigModal({ open, onOpenChange }: ConfigModalProps) {
 
         <div className="flex-1 min-h-0 flex flex-col">
           <Tabs defaultValue="import-export" className="h-full flex flex-col config-modal-tabs">
-          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-5 bg-secondary/50 flex-shrink-0">
+          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6 bg-secondary/50 flex-shrink-0">
             <TabsTrigger 
               value="import-export" 
               className="data-[state=active]:bg-primary data-[state=active]:text-white text-xs px-2 py-1"
@@ -487,6 +587,13 @@ export default function ConfigModal({ open, onOpenChange }: ConfigModalProps) {
               data-testid="tab-general"
             >
               Geral
+            </TabsTrigger>
+            <TabsTrigger 
+              value="tecnicos" 
+              className="data-[state=active]:bg-primary data-[state=active]:text-white text-xs px-2 py-1"
+              data-testid="tab-tecnicos"
+            >
+              Técnicos
             </TabsTrigger>
             <TabsTrigger 
               value="cidade" 
@@ -795,8 +902,156 @@ export default function ConfigModal({ open, onOpenChange }: ConfigModalProps) {
             </div>
           </TabsContent>
 
-  
+            <TabsContent value="tecnicos" className="space-y-6 mt-6 pb-16 data-[state=active]:block config-modal-tab-content">
+            <div className="glass-card p-4 lg:p-6 rounded-lg space-y-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Users className="h-5 w-5 text-green-400" />
+                  <h3 className="text-lg font-medium text-white">Gerenciar Técnicos</h3>
+                </div>
+                {selectedTechnicians.length > 0 && (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    className="bg-red-600 hover:bg-red-700 text-white"
+                    onClick={handleDeleteSelectedTechnicians}
+                    disabled={deleteTechniciansMutation.isPending}
+                    data-testid="button-delete-selected-technicians"
+                  >
+                    <Trash2 className="mr-1 h-3 w-3" />
+                    Excluir ({selectedTechnicians.length})
+                  </Button>
+                )}
+              </div>
 
+              {/* Adicionar Novo Técnico */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-muted-foreground">
+                  Adicionar Novo Técnico
+                </Label>
+                <div className="flex space-x-2">
+                  <Input
+                    value={newTechnicianName}
+                    onChange={(e) => setNewTechnicianName(e.target.value)}
+                    placeholder="Nome do técnico"
+                    className="bg-secondary border border-border text-white flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        handleAddTechnician();
+                      }
+                    }}
+                    data-testid="input-new-technician-name"
+                  />
+                  <Button
+                    className="bg-primary hover:bg-primary/90 text-white"
+                    onClick={handleAddTechnician}
+                    disabled={createTechnicianMutation.isPending || !newTechnicianName.trim()}
+                    data-testid="button-add-technician"
+                  >
+                    <Plus className="mr-1 h-3 w-3" />
+                    Adicionar
+                  </Button>
+                </div>
+              </div>
+
+              {/* Lista de Técnicos */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-muted-foreground">
+                  Técnicos Cadastrados ({technicians.length})
+                </Label>
+                
+                {technicians.length > 0 && (
+                  <div className="flex items-center space-x-2 mb-3">
+                    <Checkbox
+                      id="select-all-technicians"
+                      checked={selectedTechnicians.length === technicians.length}
+                      onCheckedChange={handleSelectAllTechnicians}
+                    />
+                    <label htmlFor="select-all-technicians" className="text-sm text-white cursor-pointer">
+                      Selecionar todos ({technicians.length} técnicos)
+                    </label>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {technicians.length === 0 ? (
+                    <div className="text-center py-8">
+                      <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground text-sm">
+                        Nenhum técnico cadastrado. Adicione um novo técnico acima.
+                      </p>
+                    </div>
+                  ) : (
+                    technicians.map((technician) => {
+                      const isEditing = editingTechnician?.id === technician.id;
+                      
+                      return (
+                        <div 
+                          key={technician.id} 
+                          className="glass-card p-3 rounded-lg flex items-center space-x-3"
+                          data-testid={`technician-item-${technician.name.replace(/\s+/g, "-").toLowerCase()}`}
+                        >
+                          <Checkbox
+                            id={technician.id}
+                            checked={selectedTechnicians.includes(technician.id)}
+                            onCheckedChange={(checked) => handleTechnicianSelection(technician.id, checked as boolean)}
+                          />
+                          
+                          {isEditing ? (
+                            <div className="flex-1 flex items-center space-x-2">
+                              <Input
+                                value={editingTechnician.name}
+                                onChange={(e) => setEditingTechnician({ ...editingTechnician, name: e.target.value })}
+                                className="bg-secondary border border-border text-white flex-1"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    handleUpdateTechnician();
+                                  } else if (e.key === 'Escape') {
+                                    setEditingTechnician(null);
+                                  }
+                                }}
+                                autoFocus
+                              />
+                              <Button
+                                size="sm"
+                                className="bg-primary hover:bg-primary/90 text-white"
+                                onClick={handleUpdateTechnician}
+                                disabled={updateTechnicianMutation.isPending}
+                              >
+                                <Check className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="glass-button text-white border-border"
+                                onClick={() => setEditingTechnician(null)}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
+                              <Users className="h-4 w-4 text-green-400" />
+                              <span className="flex-1 text-white font-medium">{technician.name}</span>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="glass-button px-2 py-1 text-white"
+                                onClick={() => setEditingTechnician(technician)}
+                                data-testid={`button-edit-technician-${technician.name.replace(/\s+/g, "-").toLowerCase()}`}
+                              >
+                                <Edit className="h-3 w-3" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </div>
+          </TabsContent>
 
             <TabsContent value="cidade" className="space-y-6 mt-6 pb-16 data-[state=active]:block config-modal-tab-content">
             <div className="glass-card p-4 lg:p-6 rounded-lg space-y-6">
