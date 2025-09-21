@@ -38,7 +38,8 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
   const [reportName, setReportName] = useState("");
   const [reportDate, setReportDate] = useState("");
   const [shift, setShift] = useState("");
-  const [boxes, setBoxes] = useState<BoxData[]>([{ boxNumber: "", technicianIds: [] }]);
+  const [boxes, setBoxes] = useState<BoxData[]>([]);
+  const [selectedBoxIndex, setSelectedBoxIndex] = useState<number | null>(null);
   const [newServiceOrders, setNewServiceOrders] = useState<NewServiceOrder[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -81,11 +82,39 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
   });
 
   const addBox = () => {
-    setBoxes(prev => [...prev, { boxNumber: "", technicianIds: [] }]);
+    const newBoxNumber = `caixa-${boxes.length + 1}`;
+    setBoxes(prev => [...prev, { boxNumber: newBoxNumber, technicianIds: [] }]);
   };
 
-  const updateBoxNumber = (index: number, boxNumber: string) => {
-    setBoxes(prev => prev.map((box, i) => i === index ? { ...box, boxNumber } : box));
+  const removeBox = (index: number) => {
+    setBoxes(prev => prev.filter((_, i) => i !== index));
+    if (selectedBoxIndex === index) {
+      setSelectedBoxIndex(null);
+    } else if (selectedBoxIndex !== null && selectedBoxIndex > index) {
+      setSelectedBoxIndex(selectedBoxIndex - 1);
+    }
+    
+    // Limpar service orders que referenciam boxes removidos ou ajustar índices
+    setNewServiceOrders(prev => prev.map(order => {
+      if (order.boxIndex === "") return order;
+      
+      const orderBoxIndex = Number(order.boxIndex);
+      if (orderBoxIndex === index) {
+        return { ...order, boxIndex: "", technicianId: "" };
+      } else if (orderBoxIndex > index) {
+        return { ...order, boxIndex: (orderBoxIndex - 1).toString() };
+      }
+      return order;
+    }));
+  };
+
+  const resetModalState = () => {
+    setReportName("");
+    setReportDate("");
+    setShift("");
+    setBoxes([]);
+    setSelectedBoxIndex(null);
+    setNewServiceOrders([]);
   };
 
   const updateBoxTechnicians = (index: number, technicianIds: string[]) => {
@@ -113,24 +142,6 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     }));
   };
 
-  const removeBox = (index: number) => {
-    setBoxes(prev => prev.filter((_, i) => i !== index));
-    
-    // Limpar service orders que referenciam boxes removidos ou ajustar índices
-    setNewServiceOrders(prev => prev.map(order => {
-      if (order.boxIndex === "") return order; // Nenhuma caixa selecionada, manter como está
-      
-      const orderBoxIndex = Number(order.boxIndex);
-      if (orderBoxIndex === index) {
-        // Box removido - resetar seleção
-        return { ...order, boxIndex: "", technicianId: "" };
-      } else if (orderBoxIndex > index) {
-        // Ajustar índice para box que mudou de posição
-        return { ...order, boxIndex: (orderBoxIndex - 1).toString() };
-      }
-      return order; // Box não afetado
-    }));
-  };
 
   const generateReport = async () => {
     const validBoxes = boxes.filter(box => box.boxNumber.trim() !== "" && box.technicianIds.length > 0);
@@ -204,7 +215,7 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     validBoxes.forEach(box => {
       // Encontrar service orders para técnicos desta caixa na data especificada
       const boxOrders = (updatedServiceOrders as ServiceOrder[]).filter(order => 
-        box.technicianIds.includes(order.technicianId) && 
+        order.technicianId && box.technicianIds.includes(order.technicianId) && 
         order.scheduledDate === reportDate
       );
       
@@ -234,10 +245,7 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     onReportGenerated(content, reportName, reportDate, shift);
     
     // Reset form
-    setReportName("");
-    setReportDate("");
-    setShift("");
-    setNewServiceOrders([]);
+    resetModalState();
   };
 
   const getNeighborhoodsByCity = (cityId: string): Neighborhood[] => {
@@ -269,8 +277,15 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     setNewServiceOrders(prev => prev.filter((_, i) => i !== index));
   };
 
+  const handleModalClose = (isOpen: boolean) => {
+    if (!isOpen) {
+      resetModalState();
+    }
+    onOpenChange(isOpen);
+  };
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleModalClose}>
       <DialogContent className="glass-card border-border/30 text-white modal-dialog modal-content report-modal-content flex flex-col">
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
@@ -281,7 +296,7 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
               variant="ghost"
               size="sm"
               className="text-muted-foreground hover:text-white"
-              onClick={() => onOpenChange(false)}
+              onClick={() => handleModalClose(false)}
               data-testid="button-close-report-modal"
             >
               <X className="h-4 w-4" />
@@ -334,10 +349,11 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
             </div>
           </div>
 
+          {/* Seção de Números das Caixas */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <Label className="text-lg font-medium text-white">
-                Números das Caixas
+                Números das Caixas:
               </Label>
               <Button
                 type="button"
@@ -350,108 +366,120 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
               </Button>
             </div>
             
-            <div className="space-y-3">
+            <div className="flex flex-wrap gap-2 mb-6">
               {boxes.map((box, index) => (
-                <div key={index} className="glass-card p-4 rounded-lg space-y-3">
-                  <div className="flex items-start space-x-3">
-                    <div className="flex-1 space-y-3">
-                      <div>
-                        <Label className="block text-xs font-medium text-muted-foreground mb-1">
-                          Número da Caixa
-                        </Label>
-                        <Input
-                          type="text"
-                          value={box.boxNumber}
-                          onChange={(e) => updateBoxNumber(index, e.target.value)}
-                          className="w-full bg-secondary border border-border rounded-lg px-3 py-2 text-white text-sm"
-                          placeholder="Ex: CAIXA-01"
-                          data-testid={`input-box-number-${index}`}
-                        />
-                      </div>
-                      
-                      <div>
-                        <Label className="block text-xs font-medium text-muted-foreground mb-2">
-                          Técnicos Responsáveis
-                        </Label>
-                        <div className="space-y-2">
-                          {technicians.map((technician) => {
-                            const isSelected = box.technicianIds.includes(technician.id);
-                            // Verificar se técnico já está em outra caixa
-                            const isInOtherBox = boxes.some((otherBox, otherIndex) => 
-                              otherIndex !== index && otherBox.technicianIds.includes(technician.id)
-                            );
-                            const isDisabled = isInOtherBox && !isSelected;
-                            
-                            return (
-                              <label key={technician.id} className={`flex items-center space-x-2 ${isDisabled ? 'opacity-50' : ''}`}>
-                                <input
-                                  type="checkbox"
-                                  checked={isSelected}
-                                  disabled={isDisabled}
-                                  onChange={(e) => {
-                                    if (e.target.checked) {
-                                      updateBoxTechnicians(index, [...box.technicianIds, technician.id]);
-                                    } else {
-                                      updateBoxTechnicians(index, box.technicianIds.filter(id => id !== technician.id));
-                                    }
-                                  }}
-                                  className="rounded bg-secondary border-border text-primary focus:ring-primary focus:ring-offset-0 disabled:cursor-not-allowed"
-                                  data-testid={`checkbox-technician-${index}-${technician.id}`}
-                                />
-                                <span className={`text-sm ${isDisabled ? 'text-muted-foreground' : 'text-white'}`}>
-                                  {technician.name}
-                                  {isInOtherBox && !isSelected && (
-                                    <span className="ml-1 text-xs text-muted-foreground">(em outra caixa)</span>
-                                  )}
-                                </span>
-                              </label>
-                            );
-                          })}
-                          {technicians.length === 0 && (
-                            <div className="text-muted-foreground text-sm">
-                              Nenhum técnico cadastrado
-                            </div>
-                          )}
-                        </div>
-                        
-                        {box.technicianIds.length > 0 && (
-                          <div className="mt-2 pt-2 border-t border-border/30">
-                            <Label className="text-xs text-muted-foreground">Técnicos selecionados:</Label>
-                            <div className="text-sm text-primary">
-                              {technicians
-                                .filter(t => box.technicianIds.includes(t.id))
-                                .map(t => t.name)
-                                .join(", ")}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {boxes.length > 1 && (
-                      <div className="flex items-start pt-4">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="glass-button p-2 text-white hover:text-red-400"
-                          onClick={() => removeBox(index)}
-                          data-testid={`button-remove-box-${index}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
-                  </div>
+                <div key={index} className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedBoxIndex(selectedBoxIndex === index ? null : index)}
+                    className={`px-4 py-2 rounded-full border text-sm font-medium transition-all ${
+                      selectedBoxIndex === index
+                        ? 'bg-blue-600 text-white border-blue-600'
+                        : 'bg-secondary text-white border-border hover:border-blue-400'
+                    }`}
+                    data-testid={`button-box-${index}`}
+                  >
+                    {box.boxNumber}
+                  </button>
+                  {boxes.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeBox(index)}
+                      className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
+                      data-testid={`button-remove-box-${index}`}
+                    >
+                      ×
+                    </button>
+                  )}
                 </div>
               ))}
               
               {boxes.length === 0 && (
-                <div className="text-center py-8 text-muted-foreground">
-                  Nenhuma caixa adicionada
+                <div className="text-center py-4 text-muted-foreground w-full">
+                  Nenhuma caixa criada
                 </div>
               )}
             </div>
+          </div>
+
+          {/* Seção de Técnicos */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <Label className="text-lg font-medium text-white">
+                Técnicos
+              </Label>
+            </div>
+
+            {selectedBoxIndex !== null ? (
+              <div className="space-y-3">
+                <div className="glass-card p-4 rounded-lg">
+                  <Label className="block text-sm font-medium text-muted-foreground mb-3">
+                    Técnicos para {boxes[selectedBoxIndex]?.boxNumber}:
+                  </Label>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {technicians.map((technician) => {
+                      const isSelected = boxes[selectedBoxIndex]?.technicianIds.includes(technician.id);
+                      const isInOtherBox = boxes.some((otherBox, otherIndex) => 
+                        otherIndex !== selectedBoxIndex && otherBox.technicianIds.includes(technician.id)
+                      );
+                      const isDisabled = isInOtherBox && !isSelected;
+                      
+                      return (
+                        <label 
+                          key={technician.id} 
+                          className={`flex items-center space-x-3 p-3 rounded-lg border transition-all cursor-pointer ${
+                            isSelected 
+                              ? 'bg-blue-500/20 border-blue-500 text-white' 
+                              : isDisabled
+                                ? 'bg-secondary/30 border-border/30 text-muted-foreground cursor-not-allowed'
+                                : 'bg-secondary/50 border-border hover:border-blue-400 text-white hover:bg-secondary/70'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            disabled={isDisabled}
+                            onChange={(e) => {
+                              const currentTechnicians = boxes[selectedBoxIndex]?.technicianIds || [];
+                              if (e.target.checked) {
+                                updateBoxTechnicians(selectedBoxIndex, [...currentTechnicians, technician.id]);
+                              } else {
+                                updateBoxTechnicians(selectedBoxIndex, currentTechnicians.filter(id => id !== technician.id));
+                              }
+                            }}
+                            className="rounded bg-secondary border-border text-primary focus:ring-primary focus:ring-offset-0 disabled:cursor-not-allowed"
+                            data-testid={`checkbox-technician-${selectedBoxIndex}-${technician.id}`}
+                          />
+                          <span className="text-sm font-medium">
+                            {technician.name}
+                            {isInOtherBox && !isSelected && (
+                              <span className="ml-1 text-xs opacity-60">(em outra caixa)</span>
+                            )}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {boxes[selectedBoxIndex]?.technicianIds.length > 0 && (
+                    <div className="mt-4 p-3 bg-secondary/30 rounded-lg">
+                      <Label className="text-sm text-primary font-medium">Resumo:</Label>
+                      <div className="text-sm text-white mt-1">
+                        {technicians
+                          .filter(t => boxes[selectedBoxIndex]?.technicianIds.includes(t.id))
+                          .map(t => t.name.toUpperCase())
+                          .join(" E ")} : {boxes[selectedBoxIndex]?.boxNumber}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                Selecione uma caixa para gerenciar técnicos
+              </div>
+            )}
           </div>
 
           <div>
@@ -674,7 +702,7 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
         <div className="flex space-x-3 mt-6 pt-4 border-t border-border/30 flex-shrink-0">
           <Button
             className="flex-1 glass-button py-3 rounded-lg text-white font-medium"
-            onClick={() => onOpenChange(false)}
+            onClick={() => handleModalClose(false)}
             data-testid="button-cancel-report"
           >
             Cancelar
