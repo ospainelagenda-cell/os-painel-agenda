@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Team, ServiceOrder, City, Neighborhood } from "@shared/schema";
+import type { Team, ServiceOrder, City, Neighborhood, Technician } from "@shared/schema";
 
 interface EditDayServicesModalProps {
   open: boolean;
@@ -30,6 +30,10 @@ export default function EditDayServicesModal({
     queryKey: ["/api/teams"]
   });
 
+  const { data: technicians = [] } = useQuery<Technician[]>({
+    queryKey: ["/api/technicians"]
+  });
+
   const { data: serviceOrders = [] } = useQuery<ServiceOrder[]>({
     queryKey: ["/api/service-orders"]
   });
@@ -41,6 +45,16 @@ export default function EditDayServicesModal({
   const { data: neighborhoods = [] } = useQuery<Neighborhood[]>({
     queryKey: ["/api/neighborhoods"]
   });
+
+  // Function to get technicians names for a team
+  const getTeamTechnicians = (team: Team) => {
+    const teamTechnicians = team.technicianIds
+      .map(techId => technicians.find(tech => tech.id === techId))
+      .filter((tech): tech is Technician => tech !== undefined)
+      .map(tech => tech.name);
+    
+    return teamTechnicians.length > 0 ? teamTechnicians.join(', ') : 'Sem técnicos';
+  };
 
   // Filter services for the selected date
   useEffect(() => {
@@ -258,13 +272,24 @@ export default function EditDayServicesModal({
                   <Label className="text-sm font-medium text-muted-foreground">
                     Tipo de Serviço
                   </Label>
-                  <Input
-                    value={service.type}
-                    onChange={(e) => updateService(index, 'type', e.target.value)}
-                    placeholder="Ex: ATIVAÇÃO"
-                    className="glass-input"
-                    data-testid={`input-type-${index}`}
-                  />
+                  <Select 
+                    value={service.type || ""} 
+                    onValueChange={(value) => updateService(index, 'type', value)}
+                  >
+                    <SelectTrigger className="glass-input" data-testid={`select-type-${index}`}>
+                      <SelectValue placeholder="Selecione o tipo" />
+                    </SelectTrigger>
+                    <SelectContent className="glass-card border-border/30">
+                      <SelectItem value="ATIVAÇÃO">ATIVAÇÃO</SelectItem>
+                      <SelectItem value="MANUTENÇÃO">MANUTENÇÃO</SelectItem>
+                      <SelectItem value="INSTALAÇÃO">INSTALAÇÃO</SelectItem>
+                      <SelectItem value="REPARO">REPARO</SelectItem>
+                      <SelectItem value="LOSS">LOSS</SelectItem>
+                      <SelectItem value="UPGRADE">UPGRADE</SelectItem>
+                      <SelectItem value="SEM CONEXÃO">SEM CONEXÃO</SelectItem>
+                      <SelectItem value="T.EQUIPAMENTO">T.EQUIPAMENTO</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
@@ -281,7 +306,10 @@ export default function EditDayServicesModal({
                     <SelectContent className="glass-card border-border/30">
                       {teams.map((team) => (
                         <SelectItem key={team.id} value={team.id}>
-                          {team.name} (Caixa {team.boxNumber})
+                          <div className="flex flex-col">
+                            <span className="font-medium">{team.name} (Caixa {team.boxNumber})</span>
+                            <span className="text-xs text-muted-foreground">{getTeamTechnicians(team)}</span>
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>

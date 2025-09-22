@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, Copy, Check, Save, Edit } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ export default function GeneratedReportModal({
 }: GeneratedReportModalProps) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
+  const hasAutoSaved = useRef(false);
   const { toast } = useToast();
 
   const saveReportMutation = useMutation({
@@ -55,6 +56,20 @@ export default function GeneratedReportModal({
       });
     }
   });
+
+  // Auto-save report when modal opens with content (only once per modal session)
+  useEffect(() => {
+    if (open && reportContent && !hasAutoSaved.current) {
+      hasAutoSaved.current = true;
+      saveReportMutation.mutate();
+    }
+    
+    // Reset when modal closes
+    if (!open) {
+      hasAutoSaved.current = false;
+      setSaved(false);
+    }
+  }, [open, reportContent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const copyToClipboard = async () => {
     try {
