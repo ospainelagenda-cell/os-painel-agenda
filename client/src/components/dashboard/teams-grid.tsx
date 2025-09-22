@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { Team, ServiceOrder, Technician } from "@shared/schema";
+import type { Team, ServiceOrder, Technician, Report } from "@shared/schema";
 
 interface TeamsGridProps {
   onReallocate: (teamId: string) => void;
@@ -64,7 +64,7 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
   
   // Filter state
   const [filterMode, setFilterMode] = useState<'auto' | 'manual'>('auto');
-  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState('all');
   
   const [editingNotes, setEditingNotes] = useState<string | null>(null);
   const [notesInput, setNotesInput] = useState("");
@@ -83,6 +83,72 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
   const { data: serviceOrders = [] } = useQuery<ServiceOrder[]>({
     queryKey: ["/api/service-orders"]
   });
+
+  const { data: reports = [] } = useQuery<Report[]>({
+    queryKey: ["/api/reports"]
+  });
+
+  // Function to extract team names mentioned in reports
+  const getTeamsFromReports = (targetDate: string, targetShift: string) => {
+    const relevantReports = reports.filter(report => 
+      report.date === targetDate && report.shift.toLowerCase() === targetShift.toLowerCase()
+    );
+    
+    if (relevantReports.length === 0) {
+      return [];
+    }
+    
+    const teamNames = new Set<string>();
+    
+    relevantReports.forEach(report => {
+      // Extract team names from report content
+      // Format: "EQUIPE: VICTOR F. E SHELBERT (CAIXA-01)" or "VICTOR F. E SHELBERT: (CAIXA - 01)"
+      const teamRegex = /(?:EQUIPE:\s+)?([A-ZÁÉÍÓÚÀÂÊÔÇ\s]+)(?:\s*:\s*)?\(CAIXA\s*-?\s*\d+\)/gi;
+      const matches = Array.from(report.content.matchAll(teamRegex));
+      
+      matches.forEach(match => {
+        const teamName = match[1].trim().toUpperCase();
+        teamNames.add(teamName);
+      });
+    });
+    
+    return Array.from(teamNames);
+  };
+
+  // Function to get team display name (same format as in reports)
+  const getTeamDisplayName = (team: Team) => {
+    const technicianNames = team.technicianIds
+      .map(technicianId => {
+        const technician = technicians.find(t => t.id === technicianId);
+        return technician ? technician.name.toUpperCase() : '';
+      })
+      .filter(name => name !== '')
+      .join(' E ');
+    
+    return technicianNames;
+  };
+
+  // Function to filter teams based on reports
+  const getFilteredTeamsByReports = (targetDate: string | null, targetShift: string | null) => {
+    if (!targetDate || !targetShift) {
+      return []; // If no date/shift, don't show any teams
+    }
+    
+    const teamsInReports = getTeamsFromReports(targetDate, targetShift);
+    
+    if (teamsInReports.length === 0) {
+      return []; // If no teams in reports, don't show any teams
+    }
+    
+    return teams.filter(team => {
+      const teamDisplayName = getTeamDisplayName(team);
+      return teamsInReports.some(reportTeamName => 
+        teamDisplayName === reportTeamName ||
+        reportTeamName.includes(teamDisplayName) ||
+        teamDisplayName.includes(reportTeamName)
+      );
+    });
+  };
 
 
   const updateTeamNotesMutation = useMutation({
@@ -148,7 +214,7 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
     if (filterMode === 'auto') {
       return getAutoFilteredDate;
     }
-    return selectedDate || null;
+    return selectedDate === 'all' ? null : selectedDate;
   };
   
   const displayDate = getDisplayDate();
@@ -173,7 +239,7 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
     }
     
     // Manual mode with no date selected: show all services for the team
-    const showAllDates = filterMode === 'manual' && !selectedDate;
+    const showAllDates = filterMode === 'manual' && selectedDate === 'all';
     if (showAllDates) {
       return serviceOrders.filter(matchesTeam);
     }
@@ -317,7 +383,7 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
                     <SelectValue placeholder="Selecione uma data" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Todas as datas</SelectItem>
+                    <SelectItem value="all">Todas as datas</SelectItem>
                     {availableDates.map(date => (
                       <SelectItem key={date} value={date}>
                         {formatDate(date)}
@@ -340,7 +406,32 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {teams.map((team) => {
+        {(() => {
+          // Filter teams based on reports - only show teams that appear in reports
+          let filteredTeams: Team[] = [];
+          
+          if (filterMode === 'auto') {
+            // In auto mode, use current date and shift
+            const currentShift = getCurrentShift();
+            if (currentShift && isInOperatingHours) {
+              filteredTeams = getFilteredTeamsByReports(getLocalDateString(), currentShift);
+            }
+          } else {
+            // In manual mode, use selected date
+            if (selectedDate !== 'all' && selectedDate) {
+              // For manual mode, we need to determine the shift
+              // We'll check both shifts and combine results
+              const morningTeams = getFilteredTeamsByReports(selectedDate, 'Manhã');
+              const afternoonTeams = getFilteredTeamsByReports(selectedDate, 'Tarde');
+              // Combine and deduplicate teams
+              const combinedTeams = [...morningTeams, ...afternoonTeams];
+              filteredTeams = combinedTeams.filter((team, index, self) => 
+                index === self.findIndex(t => t.id === team.id)
+              );
+            }
+          }
+          
+          return filteredTeams.map((team) => {
           const teamServiceOrders = getTeamServiceOrders(team.id);
           const { completed, pending, rescheduled, adesivado, cancelled } = getStatusCounts(teamServiceOrders);
           const allServicesCompleted = teamServiceOrders.length > 0 && pending === 0 && rescheduled === 0 && adesivado === 0;
@@ -529,7 +620,8 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
               </div>
             </div>
           );
-        })}
+        });
+        })()}
       </div>
     </div>
   );

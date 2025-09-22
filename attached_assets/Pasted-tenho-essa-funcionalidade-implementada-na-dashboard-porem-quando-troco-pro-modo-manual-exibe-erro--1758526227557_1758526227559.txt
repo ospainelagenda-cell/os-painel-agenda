@@ -1,0 +1,44 @@
+tenho essa funcionalidade implementada na dashboard porem quando troco pro modo manual exibe erro 
+
+
+Funcionalidades Implementadas:
+1. Filtragem Automática por Turno
+Manhã (07:00 - 13:00): Mostra automaticamente os serviços agendados para o dia atual
+Tarde (13:01 - 22:00): Mostra automaticamente os serviços agendados para o dia atual
+Fora do horário: Não exibe nenhum serviço e informa que está fora do horário de operação
+2. Interface Intuitiva
+Botão "Automático": Ativa a filtragem baseada no turno atual
+Botão "Manual": Permite seleção manual de qualquer data disponível
+Dropdown de datas: Lista todas as datas com serviços agendados
+Indicadores visuais claros: Badges mostrando turno atual e status "Atual"
+3. Sistema Reativo ao Tempo
+Atualização automática a cada 30 segundos
+Mudança automática quando o horário cruza a fronteira entre turnos (13:01)
+Sincronização com o sistema de relatórios
+4. Tratamento Inteligente de Estados
+Durante o horário: Mostra serviços do turno correspondente
+Fora do horário: Cards vazios com mensagem "Fora do horário de operação"
+Sem serviços para data: Mensagem específica por equipe
+Modo manual: Permite ver qualquer data ou todas as datas
+5. Indicadores Visuais Aprimorados
+Badge verde "Atual" quando está exibindo o turno corrente
+Badge de turno (Manhã/Tarde) com cores distintas
+Status das equipes baseado nos serviços filtrados
+Mensagens contextuais para diferentes situações
+🚀 Como Funciona:
+Modo Automático (Padrão):
+
+Sistema detecta automaticamente o turno atual baseado no horário
+Filtra e exibe apenas os serviços relevantes para o momento
+Atualiza em tempo real conforme o horário muda
+Modo Manual:
+
+Usuário pode selecionar qualquer data específica
+Override da seleção automática
+Opção "Todas as datas" para visão completa
+Comportamento Dinâmico:
+
+07:00: Automaticamente muda para serviços da manhã
+13:01: Automaticamente muda para serviços da tarde
+22:01: Sai do horário de operação (nenhum serviço exibido)
+A funcionalidade está 100% operacional e integrada perfeitamente com o sistema existente! Os cards de equipes agora mostram automaticamente apenas os serviços relevantes para o turno atual, melhorando significativamente a usabilidade da dashboard.
