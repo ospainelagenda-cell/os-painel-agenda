@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import type { Report } from "@shared/schema";
 
 interface ReportsHistoryProps {
-  onViewReport: (reportContent: string) => void;
+  onViewReport: (report: Report) => void;
 }
 
 export default function ReportsHistory({ onViewReport }: ReportsHistoryProps) {
@@ -214,7 +214,7 @@ export default function ReportsHistory({ onViewReport }: ReportsHistoryProps) {
                 size="sm"
                 variant="ghost"
                 className="glass-button px-3 py-1 text-white ml-2"
-                onClick={() => onViewReport(report.content)}
+                onClick={() => onViewReport(report)}
                 data-testid={`button-view-report-${report.id}`}
               >
                 <Eye className="h-3 w-3 mr-1" />
@@ -280,7 +280,7 @@ export default function ReportsHistory({ onViewReport }: ReportsHistoryProps) {
           <Button
             variant="default"
             className="ml-4 flex-shrink-0"
-            onClick={() => onViewReport(displayReport.content)}
+            onClick={() => onViewReport(displayReport)}
           >
             <Eye className="h-4 w-4 mr-2" />
             Ver Relatório Completo

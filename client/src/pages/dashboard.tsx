@@ -56,6 +56,10 @@ export default function Dashboard() {
   const [shouldAutoSave, setShouldAutoSave] = useState<boolean>(false);
   const [reportEditMode, setReportEditMode] = useState<boolean>(false);
   const [existingReportContent, setExistingReportContent] = useState<string>("");
+  const [reportBoxes, setReportBoxes] = useState<any[]>([]);
+  const [reportMetadata, setReportMetadata] = useState<any>(null);
+  const [existingReportBoxes, setExistingReportBoxes] = useState<any[]>([]);
+  const [existingReportMetadata, setExistingReportMetadata] = useState<any>(null);
 
   const handleReallocation = (teamId: string) => {
     setSelectedTeamId(teamId);
@@ -183,19 +187,26 @@ export default function Dashboard() {
     }
   };
 
-  const handleReportGenerated = (content: string, name?: string, date?: string, shift?: string) => {
+  const handleReportGenerated = (content: string, name?: string, date?: string, shift?: string, boxes?: any[], metadata?: any) => {
     setGeneratedReportContent(content);
     setReportName(name || "Relat\u00f3rio");
     setReportDate(date || new Date().toISOString().split('T')[0]);
     setReportShift(shift || "Manh\u00e3");
+    setReportBoxes(boxes || []);
+    setReportMetadata(metadata || null);
     setShouldAutoSave(true); // Auto-save for newly generated reports
     setReportEditMode(false); // Reset edit mode
     setReportModalOpen(false);
     setGeneratedReportModalOpen(true);
   };
 
-  const handleViewReport = (reportContent: string) => {
-    setGeneratedReportContent(reportContent);
+  const handleViewReport = (report: any) => {
+    setGeneratedReportContent(report.content);
+    setReportName(report.name);
+    setReportDate(report.date);
+    setReportShift(report.shift);
+    setReportBoxes(report.boxes || []);
+    setReportMetadata(report.metadata || null);
     setShouldAutoSave(false); // Do not auto-save for viewing existing reports
     setGeneratedReportModalOpen(true);
   };
@@ -204,6 +215,8 @@ export default function Dashboard() {
     setGeneratedReportModalOpen(false);
     setReportEditMode(true);
     setExistingReportContent(generatedReportContent); // Pass the report content for editing
+    setExistingReportBoxes(reportBoxes); // Pass structured data for editing
+    setExistingReportMetadata(reportMetadata); // Pass metadata for editing
     setReportModalOpen(true);
   };
 
@@ -263,6 +276,8 @@ export default function Dashboard() {
         existingReportDate={reportDate}
         existingReportShift={reportShift}
         existingReportContent={existingReportContent}
+        existingReportBoxes={existingReportBoxes}
+        existingReportMetadata={existingReportMetadata}
       />
 
       <GeneratedReportModal
@@ -272,6 +287,8 @@ export default function Dashboard() {
         reportName={reportName}
         reportDate={reportDate}
         reportShift={reportShift}
+        reportBoxes={reportBoxes}
+        reportMetadata={reportMetadata}
         onEditReport={handleEditReport}
         shouldAutoSave={shouldAutoSave}
       />

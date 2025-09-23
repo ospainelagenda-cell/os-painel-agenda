@@ -13,6 +13,8 @@ interface GeneratedReportModalProps {
   reportName?: string;
   reportDate?: string;
   reportShift?: string;
+  reportBoxes?: any[];
+  reportMetadata?: any;
   onEditReport?: () => void;
   shouldAutoSave?: boolean;
 }
@@ -24,6 +26,8 @@ export default function GeneratedReportModal({
   reportName = "Relatório", 
   reportDate = new Date().toISOString().split('T')[0], 
   reportShift = "Manhã",
+  reportBoxes = [],
+  reportMetadata = null,
   onEditReport,
   shouldAutoSave = false
 }: GeneratedReportModalProps) {
@@ -38,7 +42,9 @@ export default function GeneratedReportModal({
         name: reportName,
         date: reportDate,
         shift: reportShift,
-        content: reportContent
+        content: reportContent,
+        boxes: reportBoxes && reportBoxes.length > 0 ? reportBoxes : null,
+        metadata: reportMetadata ? reportMetadata : null
       });
     },
     onSuccess: () => {

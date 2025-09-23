@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, timestamp, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -45,6 +45,9 @@ export const reports = pgTable("reports", {
   date: text("date").notNull(),
   shift: text("shift").notNull(), // Manhã, Tarde
   content: text("content").notNull(),
+  // Structured data for editing - stores the complete configuration as JSONB
+  boxes: jsonb("boxes").$type<any[]>(), // JSON array of BoxData with technicians and service orders
+  metadata: jsonb("metadata").$type<any>(), // JSON object with additional report configuration
   createdAt: timestamp("created_at").defaultNow(),
 });
 

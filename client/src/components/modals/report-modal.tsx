@@ -14,12 +14,14 @@ import type { Team, ServiceOrder, City, Neighborhood, Technician } from "@shared
 interface ReportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onReportGenerated: (content: string, name?: string, date?: string, shift?: string) => void;
+  onReportGenerated: (content: string, name?: string, date?: string, shift?: string, boxes?: BoxData[], metadata?: any) => void;
   editMode?: boolean;
   existingReportName?: string;
   existingReportDate?: string;
   existingReportShift?: string;
   existingReportContent?: string;
+  existingReportBoxes?: BoxData[]; // Structured data for editing
+  existingReportMetadata?: any;   // Additional metadata
 }
 
 interface NewServiceOrder {
@@ -45,7 +47,9 @@ export default function ReportModal({
   existingReportName = "",
   existingReportDate = "",
   existingReportShift = "",
-  existingReportContent = ""
+  existingReportContent = "",
+  existingReportBoxes = [],
+  existingReportMetadata = null
 }: ReportModalProps) {
   const [reportName, setReportName] = useState("");
   const [reportDate, setReportDate] = useState("");
@@ -72,6 +76,10 @@ export default function ReportModal({
 
   const { data: technicians = [] } = useQuery<Technician[]>({
     queryKey: ["/api/technicians"]
+  });
+
+  const { data: neighborhoods = [] } = useQuery<Neighborhood[]>({
+    queryKey: ["/api/neighborhoods"]
   });
 
   // Function to parse report content and extract original data structure
@@ -197,12 +205,16 @@ export default function ReportModal({
       setReportDate(existingReportDate);
       setShift(existingReportShift);
       
-      // Parse existing report content to extract original data structure
-      if (existingReportContent && technicians.length > 0) {
+      // Prioritize structured data if available, otherwise parse content
+      if (existingReportBoxes && existingReportBoxes.length > 0) {
+        // Use structured data for perfect restoration
+        setBoxes(existingReportBoxes);
+      } else if (existingReportContent && technicians.length > 0) {
+        // Fallback to parsing content (for legacy reports)
         const parsedBoxes = parseReportContent(existingReportContent);
         setBoxes(parsedBoxes);
       } else {
-        // Fallback: if no content or technicians not loaded yet, show empty
+        // No data available
         setBoxes([]);
       }
     } else {
@@ -213,7 +225,7 @@ export default function ReportModal({
       setBoxes([]);
       setSelectedBoxIndex(null);
     }
-  }, [open, editMode, existingReportName, existingReportDate, existingReportShift, existingReportContent, technicians]);
+  }, [open, editMode, existingReportName, existingReportDate, existingReportShift, existingReportContent, existingReportBoxes, technicians]);
 
   const createServiceOrderMutation = useMutation({
     mutationFn: async (orderWithAssignment: NewServiceOrder & { technicianId: string; teamId?: string }) => {
@@ -531,7 +543,23 @@ export default function ReportModal({
       }
     });
 
-    onReportGenerated(content, reportName, reportDate, shift);
+    // Prepare structured data for saving
+    const structuredBoxes = validBoxes.map(box => ({
+      ...box,
+      // Include city and neighborhood names for better readability
+      serviceOrders: box.serviceOrders.map(order => ({
+        ...order,
+        cityName: order.cityId ? cities.find(c => c.id === order.cityId)?.name || '' : '',
+        neighborhoodName: order.neighborhoodId ? neighborhoods.find(n => n.id === order.neighborhoodId)?.name || '' : ''
+      }))
+    }));
+
+    const metadata = {
+      lastUpdated: new Date().toISOString(),
+      version: "2.0" // Version to identify enhanced reports
+    };
+
+    onReportGenerated(content, reportName, reportDate, shift, structuredBoxes, metadata);
     
     // Reset form
     resetModalState();
