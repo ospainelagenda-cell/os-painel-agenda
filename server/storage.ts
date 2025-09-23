@@ -45,6 +45,7 @@ export interface IStorage {
   getReport(id: string): Promise<Report | undefined>;
   getAllReports(): Promise<Report[]>;
   createReport(report: InsertReport): Promise<Report>;
+  updateReport(id: string, report: Partial<InsertReport>): Promise<Report | undefined>;
   deleteReport(id: string): Promise<boolean>;
 
   // Cities
@@ -562,6 +563,15 @@ Taxa de conclusão: 92.7%`
     };
     this.reports.set(id, report);
     return report;
+  }
+
+  async updateReport(id: string, updateData: Partial<InsertReport>): Promise<Report | undefined> {
+    const report = this.reports.get(id);
+    if (!report) return undefined;
+    
+    const updated = { ...report, ...updateData };
+    this.reports.set(id, updated);
+    return updated;
   }
 
   async deleteReport(id: string): Promise<boolean> {

@@ -17,6 +17,8 @@ interface GeneratedReportModalProps {
   reportMetadata?: any;
   onEditReport?: () => void;
   shouldAutoSave?: boolean;
+  reportId?: string | null;
+  isEditMode?: boolean;
 }
 
 export default function GeneratedReportModal({ 
@@ -29,7 +31,9 @@ export default function GeneratedReportModal({
   reportBoxes = [],
   reportMetadata = null,
   onEditReport,
-  shouldAutoSave = false
+  shouldAutoSave = false,
+  reportId = null,
+  isEditMode = false
 }: GeneratedReportModalProps) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -38,14 +42,21 @@ export default function GeneratedReportModal({
 
   const saveReportMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest('POST', '/api/reports', {
+      const reportData = {
         name: reportName,
         date: reportDate,
         shift: reportShift,
         content: reportContent,
         boxes: reportBoxes && reportBoxes.length > 0 ? reportBoxes : null,
         metadata: reportMetadata ? reportMetadata : null
-      });
+      };
+
+      // Use PUT for updating existing reports, POST for creating new ones
+      if (reportId && isEditMode) {
+        return apiRequest('PUT', `/api/reports/${reportId}`, reportData);
+      } else {
+        return apiRequest('POST', '/api/reports', reportData);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/reports"] });
@@ -53,21 +64,22 @@ export default function GeneratedReportModal({
       setTimeout(() => setSaved(false), 2000);
       toast({
         title: "Sucesso!",
-        description: "Relatório salvo com sucesso no histórico.",
+        description: isEditMode ? "Relatório atualizado com sucesso!" : "Relatório salvo com sucesso no histórico.",
       });
     },
     onError: () => {
       toast({
         title: "Erro",
-        description: "Erro ao salvar relatório. Tente novamente.",
+        description: isEditMode ? "Erro ao atualizar relatório. Tente novamente." : "Erro ao salvar relatório. Tente novamente.",
         variant: "destructive"
       });
     }
   });
 
   // Auto-save report when modal opens with content (only once per modal session and only if shouldAutoSave is true)
+  // Don't auto-save when in edit mode - user must click "Atualizar Relatório" button
   useEffect(() => {
-    if (open && reportContent && shouldAutoSave && !hasAutoSaved.current) {
+    if (open && reportContent && shouldAutoSave && !hasAutoSaved.current && !isEditMode) {
       hasAutoSaved.current = true;
       saveReportMutation.mutate();
     }
@@ -77,7 +89,7 @@ export default function GeneratedReportModal({
       hasAutoSaved.current = false;
       setSaved(false);
     }
-  }, [open, reportContent, shouldAutoSave]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, reportContent, shouldAutoSave, isEditMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const copyToClipboard = async () => {
     try {
@@ -155,7 +167,7 @@ export default function GeneratedReportModal({
             ) : (
               <>
                 <Save className="mr-2 h-4 w-4" />
-                Salvar
+                {isEditMode ? "Atualizar Relatório" : "Salvar"}
               </>
             )}
           </Button>

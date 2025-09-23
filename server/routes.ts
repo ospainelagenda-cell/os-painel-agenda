@@ -203,6 +203,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.put("/api/reports/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validatedData = insertReportSchema.partial().parse(req.body);
+      const report = await storage.updateReport(id, validatedData);
+      
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+      
+      res.json(report);
+    } catch (error) {
+      res.status(400).json({ message: "Invalid report data" });
+    }
+  });
+
   app.delete("/api/reports/:id", async (req, res) => {
     try {
       const { id } = req.params;

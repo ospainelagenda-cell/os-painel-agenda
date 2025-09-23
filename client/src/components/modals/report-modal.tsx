@@ -422,45 +422,48 @@ export default function ReportModal({
     });
     const availableBoxes = boxes.filter(box => box.boxNumber.trim() !== "" && box.technicianIds.length > 0);
     
-    if (allValidOrders.length > 0 && availableBoxes.length === 0) {
-      toast({ title: "Erro: Nenhuma caixa configurada para atribuir as ordens de serviço", variant: "destructive" });
-      return;
-    }
-    
-    for (const orderWithBox of allValidOrders) {
-      const { boxIndex, ...order } = orderWithBox;
-      try {
-        // Use a specific box for this order
-        const selectedBox = boxes[boxIndex];
-        if (!selectedBox || selectedBox.technicianIds.length === 0) {
-          console.warn(`Caixa ${boxIndex} não tem técnicos atribuídos, pulando ordem ${order.code}`);
-          continue;
-        }
-        
-        // Select first technician from the specific box (you can modify this logic as needed)
-        const selectedTechnicianId = selectedBox.technicianIds[0];
-        
-        // Encontrar o team do técnico selecionado
-        const selectedTechnician = technicians.find(t => t.id === selectedTechnicianId);
-        const teamForTechnician = teams.find(team => team.technicianIds.includes(selectedTechnicianId));
-        
-        // Avisar se nenhum team foi encontrado para o técnico
-        if (!teamForTechnician) {
-          console.warn(`Nenhum team encontrado para o técnico ${selectedTechnician?.name || selectedTechnicianId}`);
-          toast({ 
-            title: `Aviso: Técnico ${selectedTechnician?.name || 'desconhecido'} não pertence a nenhum team`, 
-            variant: "default" 
+    // Only create new service orders when NOT in edit mode
+    if (!editMode) {
+      if (allValidOrders.length > 0 && availableBoxes.length === 0) {
+        toast({ title: "Erro: Nenhuma caixa configurada para atribuir as ordens de serviço", variant: "destructive" });
+        return;
+      }
+      
+      for (const orderWithBox of allValidOrders) {
+        const { boxIndex, ...order } = orderWithBox;
+        try {
+          // Use a specific box for this order
+          const selectedBox = boxes[boxIndex];
+          if (!selectedBox || selectedBox.technicianIds.length === 0) {
+            console.warn(`Caixa ${boxIndex} não tem técnicos atribuídos, pulando ordem ${order.code}`);
+            continue;
+          }
+          
+          // Select first technician from the specific box (you can modify this logic as needed)
+          const selectedTechnicianId = selectedBox.technicianIds[0];
+          
+          // Encontrar o team do técnico selecionado
+          const selectedTechnician = technicians.find(t => t.id === selectedTechnicianId);
+          const teamForTechnician = teams.find(team => team.technicianIds.includes(selectedTechnicianId));
+          
+          // Avisar se nenhum team foi encontrado para o técnico
+          if (!teamForTechnician) {
+            console.warn(`Nenhum team encontrado para o técnico ${selectedTechnician?.name || selectedTechnicianId}`);
+            toast({ 
+              title: `Aviso: Técnico ${selectedTechnician?.name || 'desconhecido'} não pertence a nenhum team`, 
+              variant: "default" 
+            });
+          }
+          
+          await createServiceOrderMutation.mutateAsync({
+            ...order,
+            technicianId: selectedTechnicianId,
+            teamId: teamForTechnician?.id
           });
+        } catch (error) {
+          console.error("Error creating service order:", error);
+          toast({ title: `Erro ao criar ordem ${order.code}`, variant: "destructive" });
         }
-        
-        await createServiceOrderMutation.mutateAsync({
-          ...order,
-          technicianId: selectedTechnicianId,
-          teamId: teamForTechnician?.id
-        });
-      } catch (error) {
-        console.error("Error creating service order:", error);
-        toast({ title: `Erro ao criar ordem ${order.code}`, variant: "destructive" });
       }
     }
     

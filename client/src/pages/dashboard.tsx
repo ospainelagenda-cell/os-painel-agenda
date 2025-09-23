@@ -60,6 +60,7 @@ export default function Dashboard() {
   const [reportMetadata, setReportMetadata] = useState<any>(null);
   const [existingReportBoxes, setExistingReportBoxes] = useState<any[]>([]);
   const [existingReportMetadata, setExistingReportMetadata] = useState<any>(null);
+  const [currentReportId, setCurrentReportId] = useState<string | null>(null);
 
   const handleReallocation = (teamId: string) => {
     setSelectedTeamId(teamId);
@@ -194,7 +195,8 @@ export default function Dashboard() {
     setReportShift(shift || "Manh\u00e3");
     setReportBoxes(boxes || []);
     setReportMetadata(metadata || null);
-    setShouldAutoSave(true); // Auto-save for newly generated reports
+    setCurrentReportId(null); // Clear report ID for new reports
+    setShouldAutoSave(!reportEditMode); // Auto-save only for newly generated reports, not when editing
     setReportEditMode(false); // Reset edit mode
     setReportModalOpen(false);
     setGeneratedReportModalOpen(true);
@@ -207,6 +209,7 @@ export default function Dashboard() {
     setReportShift(report.shift);
     setReportBoxes(report.boxes || []);
     setReportMetadata(report.metadata || null);
+    setCurrentReportId(report.id); // Store the report ID
     setShouldAutoSave(false); // Do not auto-save for viewing existing reports
     setGeneratedReportModalOpen(true);
   };
@@ -291,6 +294,8 @@ export default function Dashboard() {
         reportMetadata={reportMetadata}
         onEditReport={handleEditReport}
         shouldAutoSave={shouldAutoSave}
+        reportId={currentReportId}
+        isEditMode={reportEditMode}
       />
 
 
