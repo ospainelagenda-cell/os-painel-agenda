@@ -19,6 +19,7 @@ interface ReportModalProps {
   existingReportName?: string;
   existingReportDate?: string;
   existingReportShift?: string;
+  existingReportContent?: string;
 }
 
 interface NewServiceOrder {
@@ -43,7 +44,8 @@ export default function ReportModal({
   editMode = false,
   existingReportName = "",
   existingReportDate = "",
-  existingReportShift = ""
+  existingReportShift = "",
+  existingReportContent = ""
 }: ReportModalProps) {
   const [reportName, setReportName] = useState("");
   const [reportDate, setReportDate] = useState("");
@@ -72,30 +74,138 @@ export default function ReportModal({
     queryKey: ["/api/technicians"]
   });
 
-  // Initialize fields when in edit mode
+  // Function to parse report content and extract original data structure
+  const parseReportContent = (reportContent: string): BoxData[] => {
+    if (!reportContent) return [];
+    
+    try {
+      const boxes: BoxData[] = [];
+      const lines = reportContent.split('\n');
+      
+      let currentBox: BoxData | null = null;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Look for team headers - support both formats:
+        // Legacy format: "EQUIPE: VICTOR F. E SHELBERT (CAIXA-01)"
+        // New format: "VICTOR F. E SHELBERT: (CAIXA - 02)"
+        let teamMatch = line.match(/^EQUIPE:\s*(.+?)\s*\(CAIXA-(\d+)\)/i);
+        let isLegacyFormat = true;
+        
+        if (!teamMatch) {
+          teamMatch = line.match(/^(.+?):\s*\(CAIXA\s*-\s*(\d{1,2})\)/i);
+          isLegacyFormat = false;
+        }
+        
+        if (teamMatch) {
+          // Save previous box if exists
+          if (currentBox) {
+            boxes.push(currentBox);
+          }
+          
+          // Extract technician names and box number
+          const technicianNames = teamMatch[1].split(/\s+e\s+/i).map(name => name.trim());
+          const boxNumber = `CAIXA-${teamMatch[2].padStart(2, '0')}`;
+          
+          // Convert technician names to IDs with improved matching
+          const technicianIds: string[] = [];
+          for (const name of technicianNames) {
+            const normalizedName = name.toUpperCase().trim();
+            // Try exact match first
+            let foundTech = technicians.find(t => t.name.toUpperCase().trim() === normalizedName);
+            // Fallback to includes match
+            if (!foundTech) {
+              foundTech = technicians.find(t => 
+                t.name.toUpperCase().includes(normalizedName) || 
+                normalizedName.includes(t.name.toUpperCase())
+              );
+            }
+            if (foundTech) {
+              technicianIds.push(foundTech.id);
+            }
+          }
+          
+          // Start new box
+          currentBox = {
+            boxNumber,
+            technicianIds,
+            serviceOrders: []
+          };
+          continue;
+        }
+        
+        // Parse service orders - support both formats:
+        // Legacy format: "• OS #139390 - ATIVAÇÃO - Concluído"
+        // New format: "- 123456 TYPE"
+        if (currentBox) {
+          let orderMatch = null;
+          
+          // Try legacy format first
+          if (line.startsWith('• OS #')) {
+            orderMatch = line.match(/^•\s*OS\s*#(\d+)\s*-\s*(.+?)(?:\s*-\s*.+)?$/);
+            if (orderMatch) {
+              const serviceOrder: NewServiceOrder = {
+                code: orderMatch[1],
+                type: orderMatch[2].trim(),
+                alert: "",
+                cityId: "",
+                neighborhoodId: ""
+              };
+              currentBox.serviceOrders.push(serviceOrder);
+              continue;
+            }
+          }
+          
+          // Try new format
+          if (line.startsWith('- ')) {
+            orderMatch = line.match(/^-\s*(\d{4,})\s+(.+)$/);
+            if (orderMatch) {
+              const serviceOrder: NewServiceOrder = {
+                code: orderMatch[1],
+                type: orderMatch[2].trim(),
+                alert: "",
+                cityId: "",
+                neighborhoodId: ""
+              };
+              currentBox.serviceOrders.push(serviceOrder);
+              continue;
+            }
+          }
+        }
+      }
+      
+      // Add the last box
+      if (currentBox) {
+        boxes.push(currentBox);
+      }
+      
+      return boxes;
+    } catch (error) {
+      console.error('Error parsing report content:', error);
+      return [];
+    }
+  };
+
+  // Initialize fields when modal opens
   useEffect(() => {
-    if (open && editMode) {
+    if (!open) return; // Exit early if modal is not open
+    
+    if (editMode) {
+      // Set basic fields
       setReportName(existingReportName);
       setReportDate(existingReportDate);
       setShift(existingReportShift);
       
-      // Load existing teams as boxes when editing
-      const existingBoxes: BoxData[] = teams.map(team => ({
-        boxNumber: team.boxNumber,
-        technicianIds: team.technicianIds,
-        teamId: team.id,
-        serviceOrders: serviceOrders
-          .filter(order => order.teamId === team.id)
-          .map(order => ({
-            code: order.code,
-            type: order.type,
-            alert: order.alert || "",
-            cityId: order.address || "", // Using address field for now
-            neighborhoodId: order.address || ""
-          }))
-      }));
-      setBoxes(existingBoxes);
-    } else if (open && !editMode) {
+      // Parse existing report content to extract original data structure
+      if (existingReportContent && technicians.length > 0) {
+        const parsedBoxes = parseReportContent(existingReportContent);
+        setBoxes(parsedBoxes);
+      } else {
+        // Fallback: if no content or technicians not loaded yet, show empty
+        setBoxes([]);
+      }
+    } else {
       // Reset fields for new report
       setReportName("");
       setReportDate(new Date().toISOString().split('T')[0]);
@@ -103,7 +213,7 @@ export default function ReportModal({
       setBoxes([]);
       setSelectedBoxIndex(null);
     }
-  }, [open, editMode, existingReportName, existingReportDate, existingReportShift, teams, serviceOrders]);
+  }, [open, editMode, existingReportName, existingReportDate, existingReportShift, existingReportContent, technicians]);
 
   const createServiceOrderMutation = useMutation({
     mutationFn: async (orderWithAssignment: NewServiceOrder & { technicianId: string; teamId?: string }) => {

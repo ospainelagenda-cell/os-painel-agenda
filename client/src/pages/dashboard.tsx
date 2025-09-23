@@ -55,6 +55,7 @@ export default function Dashboard() {
   const [reportShift, setReportShift] = useState<string>("");
   const [shouldAutoSave, setShouldAutoSave] = useState<boolean>(false);
   const [reportEditMode, setReportEditMode] = useState<boolean>(false);
+  const [existingReportContent, setExistingReportContent] = useState<string>("");
 
   const handleReallocation = (teamId: string) => {
     setSelectedTeamId(teamId);
@@ -202,6 +203,7 @@ export default function Dashboard() {
   const handleEditReport = () => {
     setGeneratedReportModalOpen(false);
     setReportEditMode(true);
+    setExistingReportContent(generatedReportContent); // Pass the report content for editing
     setReportModalOpen(true);
   };
 
@@ -260,6 +262,7 @@ export default function Dashboard() {
         existingReportName={reportName}
         existingReportDate={reportDate}
         existingReportShift={reportShift}
+        existingReportContent={existingReportContent}
       />
 
       <GeneratedReportModal
