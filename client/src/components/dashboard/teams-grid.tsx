@@ -88,10 +88,37 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
     queryKey: ["/api/reports"]
   });
 
-  // Function to extract team names mentioned in reports
+  // Function to extract team names mentioned in reports (with shift filter)
   const getTeamsFromReports = (targetDate: string, targetShift: string) => {
     const relevantReports = reports.filter(report => 
       report.date === targetDate && report.shift.toLowerCase() === targetShift.toLowerCase()
+    );
+    
+    if (relevantReports.length === 0) {
+      return [];
+    }
+    
+    const teamNames = new Set<string>();
+    
+    relevantReports.forEach(report => {
+      // Extract team names from report content
+      // Format: "EQUIPE: VICTOR F. E SHELBERT (CAIXA-01)" or "VICTOR F. E SHELBERT: (CAIXA - 01)"
+      const teamRegex = /(?:EQUIPE:\s+)?([A-ZÁÉÍÓÚÀÂÊÔÇ\s]+)(?:\s*:\s*)?\(CAIXA\s*-?\s*\d+\)/gi;
+      const matches = Array.from(report.content.matchAll(teamRegex));
+      
+      matches.forEach(match => {
+        const teamName = match[1].trim().toUpperCase();
+        teamNames.add(teamName);
+      });
+    });
+    
+    return Array.from(teamNames);
+  };
+
+  // Function to extract team names mentioned in reports (without shift filter - for manual mode)
+  const getTeamsFromReportsAllShifts = (targetDate: string) => {
+    const relevantReports = reports.filter(report => 
+      report.date === targetDate
     );
     
     if (relevantReports.length === 0) {
@@ -148,6 +175,40 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
         teamDisplayName.includes(reportTeamName)
       );
     });
+  };
+
+  // Function to filter teams by reports without shift filter (for manual mode)
+  const getFilteredTeamsByReportsAllShifts = (targetDate: string | null) => {
+    if (!targetDate) {
+      return []; // If no date, don't show any teams
+    }
+    
+    const teamsInReports = getTeamsFromReportsAllShifts(targetDate);
+    
+    if (teamsInReports.length === 0) {
+      return []; // If no teams in reports, don't show any teams
+    }
+    
+    // Parse report team names into individual technician names
+    const reportTechniciansSet = new Set<string>();
+    teamsInReports.forEach(teamName => {
+      const techNames = teamName.split(' E ').map(name => name.trim().toUpperCase());
+      techNames.forEach(name => reportTechniciansSet.add(name));
+    });
+    
+    const filteredTeams = teams.filter(team => {
+      const teamTechnicianNames = team.technicianIds.map(techId => {
+        const tech = technicians.find(tech => tech.id === techId);
+        return tech ? tech.name.toUpperCase() : '';
+      }).filter(name => name !== '');
+      
+      // Check if any technician from this team appears in the reports
+      return teamTechnicianNames.some(techName => 
+        reportTechniciansSet.has(techName)
+      );
+    });
+    
+    return filteredTeams;
   };
 
 
@@ -411,23 +472,15 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
           let filteredTeams: Team[] = [];
           
           if (filterMode === 'auto') {
-            // In auto mode, use current date and shift
+            // In auto mode, use current date and shift (filtered by current time/shift)
             const currentShift = getCurrentShift();
             if (currentShift && isInOperatingHours) {
               filteredTeams = getFilteredTeamsByReports(getLocalDateString(), currentShift);
             }
           } else {
-            // In manual mode, use selected date
+            // In manual mode, show complete report for selected date (without shift filter)
             if (selectedDate !== 'all' && selectedDate) {
-              // For manual mode, we need to determine the shift
-              // We'll check both shifts and combine results
-              const morningTeams = getFilteredTeamsByReports(selectedDate, 'Manhã');
-              const afternoonTeams = getFilteredTeamsByReports(selectedDate, 'Tarde');
-              // Combine and deduplicate teams
-              const combinedTeams = [...morningTeams, ...afternoonTeams];
-              filteredTeams = combinedTeams.filter((team, index, self) => 
-                index === self.findIndex(t => t.id === team.id)
-              );
+              filteredTeams = getFilteredTeamsByReportsAllShifts(selectedDate);
             }
           }
           

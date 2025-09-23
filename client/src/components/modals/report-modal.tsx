@@ -396,20 +396,18 @@ export default function ReportModal({
       });
     });
     
-    // Validate team-to-box consistency (each team should only map to one box)
-    const conflictedTeams: string[] = [];
+    // Log teams that span multiple boxes for info purposes (non-blocking)
+    const teamsWithMultipleBoxes: string[] = [];
     teamToBoxNumbers.forEach((boxNumbers, teamId) => {
       if (boxNumbers.size > 1) {
         const team = teams.find(t => t.id === teamId);
         const teamName = team?.name || `Team ${teamId}`;
-        conflictedTeams.push(`${teamName} (${Array.from(boxNumbers).join(', ')})`);
+        teamsWithMultipleBoxes.push(`${teamName} (${Array.from(boxNumbers).join(', ')})`);
       }
     });
     
-    if (conflictedTeams.length > 0) {
-      console.error(`Erro: Equipes com técnicos em múltiplas caixas: ${conflictedTeams.join('; ')}`);
-      alert(`Erro: As seguintes equipes têm técnicos em múltiplas caixas: ${conflictedTeams.join('; ')}. Todos os técnicos de uma equipe devem estar na mesma caixa.`);
-      return;
+    if (teamsWithMultipleBoxes.length > 0) {
+      console.info(`Info: Equipes com técnicos em múltiplas caixas (normal para atribuições dinâmicas): ${teamsWithMultipleBoxes.join('; ')}`);
     }
 
     // Create new service orders with proper round-robin assignment
@@ -466,25 +464,32 @@ export default function ReportModal({
       }
     }
     
-    // Update team boxNumbers (using the validated teamToBoxNumbers from earlier)
+    // Update team boxNumbers (best-effort: only update teams with single box assignment)
     const teamsUpdated: string[] = [];
     for (const [teamId, boxNumbers] of Array.from(teamToBoxNumbers.entries())) {
-      const boxNumber = Array.from(boxNumbers)[0] as string; // Safe since we validated size = 1
       const currentTeam = teams.find(t => t.id === teamId);
       
-      if (currentTeam && currentTeam.boxNumber !== boxNumber) {
-        try {
-          await updateTeamMutation.mutateAsync({ teamId, boxNumber });
-          teamsUpdated.push(currentTeam.name);
-          console.log(`Updated team ${currentTeam.name} with boxNumber: ${boxNumber}`);
-        } catch (error) {
-          console.error(`Failed to update team ${currentTeam.name}:`, error);
-          toast({ 
-            title: `Erro ao atualizar equipe ${currentTeam.name}`, 
-            description: "O número da caixa pode não estar atualizado corretamente.",
-            variant: "destructive" 
-          });
+      if (boxNumbers.size === 1) {
+        // Team has exactly one box, safe to update
+        const boxNumber = Array.from(boxNumbers)[0] as string;
+        
+        if (currentTeam && currentTeam.boxNumber !== boxNumber) {
+          try {
+            await updateTeamMutation.mutateAsync({ teamId, boxNumber });
+            teamsUpdated.push(currentTeam.name);
+            console.log(`Updated team ${currentTeam.name} with boxNumber: ${boxNumber}`);
+          } catch (error) {
+            console.error(`Failed to update team ${currentTeam.name}:`, error);
+            toast({ 
+              title: `Erro ao atualizar equipe ${currentTeam.name}`, 
+              description: "O número da caixa pode não estar atualizado corretamente.",
+              variant: "destructive" 
+            });
+          }
         }
+      } else {
+        // Team spans multiple boxes, skip update (normal for dynamic assignments)
+        console.info(`Skipping boxNumber update for team ${currentTeam?.name || teamId} (spans multiple boxes: ${Array.from(boxNumbers).join(', ')})`);
       }
     }
     
