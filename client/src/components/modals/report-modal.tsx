@@ -83,6 +83,22 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
     }
   });
 
+  const updateTeamMutation = useMutation({
+    mutationFn: async ({ teamId, boxNumber }: { teamId: string; boxNumber: string }) => {
+      const response = await apiRequest("PUT", `/api/teams/${teamId}`, {
+        boxNumber: boxNumber
+      });
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/teams"] });
+    },
+    onError: (error: any) => {
+      console.error("Erro ao atualizar equipe:", error);
+      toast({ title: "Erro ao atualizar número da caixa da equipe", variant: "destructive" });
+    }
+  });
+
   const addBox = () => {
     const newBoxNumber = `caixa-${boxes.length + 1}`;
     setBoxes(prev => [...prev, { boxNumber: newBoxNumber, technicianIds: [], serviceOrders: [] }]);
@@ -194,6 +210,41 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
       return;
     }
 
+    // Build team-to-box mapping to detect conflicts BEFORE creating any service orders
+    const teamToBoxNumbers = new Map<string, Set<string>>();
+    
+    // First pass: Build mapping of teams to their assigned box numbers
+    validBoxes.forEach(box => {
+      const numPart = box.boxNumber.match(/\d+/)?.[0] ?? box.boxNumber;
+      const boxNumberFormatted = `CAIXA - ${numPart.padStart(2, '0')}`;
+      
+      box.technicianIds.forEach(technicianId => {
+        const teamForTechnician = teams.find(team => team.technicianIds.includes(technicianId));
+        if (teamForTechnician) {
+          if (!teamToBoxNumbers.has(teamForTechnician.id)) {
+            teamToBoxNumbers.set(teamForTechnician.id, new Set());
+          }
+          teamToBoxNumbers.get(teamForTechnician.id)!.add(boxNumberFormatted);
+        }
+      });
+    });
+    
+    // Validate team-to-box consistency (each team should only map to one box)
+    const conflictedTeams: string[] = [];
+    teamToBoxNumbers.forEach((boxNumbers, teamId) => {
+      if (boxNumbers.size > 1) {
+        const team = teams.find(t => t.id === teamId);
+        const teamName = team?.name || `Team ${teamId}`;
+        conflictedTeams.push(`${teamName} (${Array.from(boxNumbers).join(', ')})`);
+      }
+    });
+    
+    if (conflictedTeams.length > 0) {
+      console.error(`Erro: Equipes com técnicos em múltiplas caixas: ${conflictedTeams.join('; ')}`);
+      alert(`Erro: As seguintes equipes têm técnicos em múltiplas caixas: ${conflictedTeams.join('; ')}. Todos os técnicos de uma equipe devem estar na mesma caixa.`);
+      return;
+    }
+
     // Create new service orders with proper round-robin assignment
     const allValidOrders: (NewServiceOrder & { boxIndex: number })[] = [];
     
@@ -246,6 +297,36 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
         console.error("Error creating service order:", error);
         toast({ title: `Erro ao criar ordem ${order.code}`, variant: "destructive" });
       }
+    }
+    
+    // Update team boxNumbers (using the validated teamToBoxNumbers from earlier)
+    const teamsUpdated: string[] = [];
+    for (const [teamId, boxNumbers] of Array.from(teamToBoxNumbers.entries())) {
+      const boxNumber = Array.from(boxNumbers)[0] as string; // Safe since we validated size = 1
+      const currentTeam = teams.find(t => t.id === teamId);
+      
+      if (currentTeam && currentTeam.boxNumber !== boxNumber) {
+        try {
+          await updateTeamMutation.mutateAsync({ teamId, boxNumber });
+          teamsUpdated.push(currentTeam.name);
+          console.log(`Updated team ${currentTeam.name} with boxNumber: ${boxNumber}`);
+        } catch (error) {
+          console.error(`Failed to update team ${currentTeam.name}:`, error);
+          toast({ 
+            title: `Erro ao atualizar equipe ${currentTeam.name}`, 
+            description: "O número da caixa pode não estar atualizado corretamente.",
+            variant: "destructive" 
+          });
+        }
+      }
+    }
+    
+    // Show success message if teams were updated
+    if (teamsUpdated.length > 0) {
+      toast({
+        title: "Caixas atualizadas!",
+        description: `Equipes atualizadas: ${teamsUpdated.join(', ')}`,
+      });
     }
 
     // Invalidate and refetch service orders to include newly created ones
