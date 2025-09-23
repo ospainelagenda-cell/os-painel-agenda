@@ -10,6 +10,17 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Team, ServiceOrder, Technician, Report } from "@shared/schema";
 
+// Interface for dynamic teams created from report boxes
+interface DynamicTeam {
+  id: string;
+  name: string;
+  boxNumber: string;
+  technicianIds: string[];
+  notes: string | null;
+  isActive: boolean;
+  fromReport: boolean; // Flag to indicate this is a dynamic team from report
+}
+
 interface TeamsGridProps {
   onReallocate: (teamId: string) => void;
   onAddServiceOrder?: (teamId: string) => void;
@@ -211,6 +222,167 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
     return filteredTeams;
   };
 
+  // NEW: Function to create dynamic teams from report boxes/content (with shift filter)
+  const getDynamicTeamsFromReports = (targetDate: string | null, targetShift: string | null): DynamicTeam[] => {
+    if (!targetDate || !targetShift) {
+      return [];
+    }
+    
+    const relevantReports = reports.filter(report => 
+      report.date === targetDate && report.shift.toLowerCase() === targetShift.toLowerCase()
+    );
+    
+    if (relevantReports.length === 0) {
+      return [];
+    }
+    
+    const dynamicTeams: DynamicTeam[] = [];
+    
+    relevantReports.forEach(report => {
+      // First try to use structured boxes data if available
+      if (report.boxes && Array.isArray(report.boxes) && report.boxes.length > 0) {
+        report.boxes.forEach((box: any, index: number) => {
+          if (box.technicianIds && Array.isArray(box.technicianIds) && box.technicianIds.length > 0) {
+            const technicianNames = box.technicianIds.map((techId: string) => {
+              const tech = technicians.find(t => t.id === techId);
+              return tech ? tech.name : '';
+            }).filter((name: string) => name !== '').join(' E ');
+            
+            const dynamicTeam: DynamicTeam = {
+              id: `dynamic-${report.id}-${index}`,
+              name: technicianNames,
+              boxNumber: box.boxNumber || `CAIXA-${String(index + 1).padStart(2, '0')}`,
+              technicianIds: box.technicianIds,
+              notes: null, // Can be extended to include notes from boxes
+              isActive: true,
+              fromReport: true
+            };
+            
+            dynamicTeams.push(dynamicTeam);
+          }
+        });
+      } else {
+        // Fallback to parsing content text
+        const teamRegex = /(?:EQUIPE:\s+)?([A-ZÁÉÍÓÚÀÂÊÔÇ\s]+)(?:\s*:\s*)?\(CAIXA\s*-?\s*(\d+)\)/gi;
+        const matches = Array.from(report.content.matchAll(teamRegex));
+        
+        matches.forEach((match, index) => {
+          const teamName = match[1].trim().toUpperCase();
+          const boxNumber = `CAIXA-${match[2].padStart(2, '0')}`;
+          
+          // Convert team name to technician IDs
+          const technicianIds: string[] = [];
+          const techNames = teamName.split(' E ').map(name => name.trim().toUpperCase());
+          
+          techNames.forEach(name => {
+            const tech = technicians.find(t => t.name.toUpperCase().includes(name) || name.includes(t.name.toUpperCase()));
+            if (tech) {
+              technicianIds.push(tech.id);
+            }
+          });
+          
+          const dynamicTeam: DynamicTeam = {
+            id: `dynamic-${report.id}-${index}`,
+            name: teamName,
+            boxNumber: boxNumber,
+            technicianIds: technicianIds,
+            notes: null,
+            isActive: true,
+            fromReport: true
+          };
+          
+          dynamicTeams.push(dynamicTeam);
+        });
+      }
+    });
+    
+    return dynamicTeams;
+  };
+
+  // NEW: Function to create dynamic teams from report boxes/content (without shift filter)
+  const getDynamicTeamsFromReportsAllShifts = (targetDate: string | null): DynamicTeam[] => {
+    if (!targetDate) {
+      return [];
+    }
+    
+    const relevantReports = reports.filter(report => report.date === targetDate);
+    
+    if (relevantReports.length === 0) {
+      return [];
+    }
+    
+    const dynamicTeams: DynamicTeam[] = [];
+    const seenTeams = new Set<string>(); // To avoid duplicates
+    
+    relevantReports.forEach(report => {
+      // First try to use structured boxes data if available
+      if (report.boxes && Array.isArray(report.boxes) && report.boxes.length > 0) {
+        report.boxes.forEach((box: any, index: number) => {
+          if (box.technicianIds && Array.isArray(box.technicianIds) && box.technicianIds.length > 0) {
+            const technicianNames = box.technicianIds.map((techId: string) => {
+              const tech = technicians.find(t => t.id === techId);
+              return tech ? tech.name : '';
+            }).filter((name: string) => name !== '').join(' E ');
+            
+            const teamKey = `${technicianNames}-${box.boxNumber}`;
+            if (!seenTeams.has(teamKey)) {
+              const dynamicTeam: DynamicTeam = {
+                id: `dynamic-${report.id}-${index}`,
+                name: technicianNames,
+                boxNumber: box.boxNumber || `CAIXA-${String(index + 1).padStart(2, '0')}`,
+                technicianIds: box.technicianIds,
+                notes: null, 
+                isActive: true,
+                fromReport: true
+              };
+              
+              dynamicTeams.push(dynamicTeam);
+              seenTeams.add(teamKey);
+            }
+          }
+        });
+      } else {
+        // Fallback to parsing content text
+        const teamRegex = /(?:EQUIPE:\s+)?([A-ZÁÉÍÓÚÀÂÊÔÇ\s]+)(?:\s*:\s*)?\(CAIXA\s*-?\s*(\d+)\)/gi;
+        const matches = Array.from(report.content.matchAll(teamRegex));
+        
+        matches.forEach((match, index) => {
+          const teamName = match[1].trim().toUpperCase();
+          const boxNumber = `CAIXA-${match[2].padStart(2, '0')}`;
+          
+          const teamKey = `${teamName}-${boxNumber}`;
+          if (!seenTeams.has(teamKey)) {
+            // Convert team name to technician IDs
+            const technicianIds: string[] = [];
+            const techNames = teamName.split(' E ').map(name => name.trim().toUpperCase());
+            
+            techNames.forEach(name => {
+              const tech = technicians.find(t => t.name.toUpperCase().includes(name) || name.includes(t.name.toUpperCase()));
+              if (tech) {
+                technicianIds.push(tech.id);
+              }
+            });
+            
+            const dynamicTeam: DynamicTeam = {
+              id: `dynamic-${report.id}-${index}`,
+              name: teamName,
+              boxNumber: boxNumber,
+              technicianIds: technicianIds,
+              notes: null,
+              isActive: true,
+              fromReport: true
+            };
+            
+            dynamicTeams.push(dynamicTeam);
+            seenTeams.add(teamKey);
+          }
+        });
+      }
+    });
+    
+    return dynamicTeams;
+  };
+
 
   const updateTeamNotesMutation = useMutation({
     mutationFn: async (data: { id: string; notes: string; team: Team }) => {
@@ -234,15 +406,23 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
   });
 
   const handleStartEditingNotes = (teamId: string, currentNotes: string) => {
+    // Prevent editing notes for dynamic teams
+    if (teamId.startsWith('dynamic-')) {
+      return;
+    }
     setEditingNotes(teamId);
     setNotesInput(currentNotes || "");
   };
 
-  const handleSaveNotes = (team: Team) => {
+  const handleSaveNotes = (team: Team | DynamicTeam) => {
+    // Prevent saving notes for dynamic teams
+    if (team.id.startsWith('dynamic-') || (team as DynamicTeam).fromReport) {
+      return;
+    }
     updateTeamNotesMutation.mutate({
       id: team.id,
       notes: notesInput.trim(),
-      team: team
+      team: team as Team
     });
   };
 
@@ -291,8 +471,29 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
     return names.length > 0 ? names.join(", ") : "Nenhum técnico atribuído";
   };
 
-  const getTeamServiceOrders = (teamId: string) => {
-    const matchesTeam = (order: ServiceOrder) => order.teamId === teamId;
+  const getTeamServiceOrders = (teamId: string, technicianIds?: string[], boxNumber?: string) => {
+    // For dynamic teams, match by technician IDs and/or boxNumber; for static teams, match by team ID
+    const matchesTeam = (order: ServiceOrder) => {
+      if (teamId.startsWith('dynamic-') && technicianIds) {
+        // For dynamic teams, check multiple conditions:
+        // 1. Direct technician match
+        // 2. Team match (any technician from this dynamic team belongs to the order's team)
+        // 3. Box number match (if available)
+        const directTechMatch = technicianIds.includes(order.technicianId || '');
+        const teamMatch = technicianIds.some(techId => order.teamId === teams.find(t => t.technicianIds.includes(techId))?.id);
+        
+        // Normalize box numbers for comparison (remove "CAIXA-", trim, zero-pad)
+        const normalizeBoxNumber = (boxNum: string) => {
+          return boxNum.replace(/^CAIXA\s*-?\s*/i, '').trim().padStart(2, '0');
+        };
+        const boxMatch = boxNumber && teams.find(t => t.id === order.teamId)?.boxNumber && 
+          normalizeBoxNumber(boxNumber) === normalizeBoxNumber(teams.find(t => t.id === order.teamId)?.boxNumber || '');
+        
+        return directTechMatch || teamMatch || boxMatch;
+      }
+      // For static teams, use original logic
+      return order.teamId === teamId;
+    };
     
     // Auto mode outside operating hours: show no services
     if (filterMode === 'auto' && !isInOperatingHours) {
@@ -378,18 +579,7 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
     return dates;
   }, [serviceOrders]);
 
-  if (teams.length === 0) {
-    return (
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold text-white">Equipes e Serviços</h2>
-        </div>
-        <div className="text-center py-12">
-          <p className="text-muted-foreground">Nenhuma equipe cadastrada</p>
-        </div>
-      </div>
-    );
-  }
+  // Note: Removed early return for teams.length === 0 to allow dynamic teams from reports
 
   return (
     <div className="mb-6">
@@ -468,24 +658,41 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {(() => {
-          // Filter teams based on reports - only show teams that appear in reports
-          let filteredTeams: Team[] = [];
+          // Create dynamic teams based on reports - show all boxes/teams defined in reports
+          let dynamicTeams: DynamicTeam[] = [];
           
           if (filterMode === 'auto') {
             // In auto mode, use current date and shift (filtered by current time/shift)
             const currentShift = getCurrentShift();
             if (currentShift && isInOperatingHours) {
-              filteredTeams = getFilteredTeamsByReports(getLocalDateString(), currentShift);
+              dynamicTeams = getDynamicTeamsFromReports(getLocalDateString(), currentShift);
             }
           } else {
             // In manual mode, show complete report for selected date (without shift filter)
             if (selectedDate !== 'all' && selectedDate) {
-              filteredTeams = getFilteredTeamsByReportsAllShifts(selectedDate);
+              dynamicTeams = getDynamicTeamsFromReportsAllShifts(selectedDate);
+            } else if (selectedDate === 'all') {
+              // Aggregate dynamic teams from all available dates (from reports, not just service orders)
+              const reportDates = Array.from(new Set(reports.map(r => r.date)));
+              const allDates = reportDates.length > 0 ? reportDates : availableDates;
+              const allTeamsMap = new Map<string, DynamicTeam>();
+              
+              allDates.forEach(date => {
+                const teamsForDate = getDynamicTeamsFromReportsAllShifts(date);
+                teamsForDate.forEach(team => {
+                  const key = `${team.name}-${team.boxNumber}`;
+                  if (!allTeamsMap.has(key)) {
+                    allTeamsMap.set(key, team);
+                  }
+                });
+              });
+              
+              dynamicTeams = Array.from(allTeamsMap.values());
             }
           }
           
-          return filteredTeams.map((team) => {
-          const teamServiceOrders = getTeamServiceOrders(team.id);
+          return dynamicTeams.map((team) => {
+          const teamServiceOrders = getTeamServiceOrders(team.id, team.technicianIds, team.boxNumber);
           const { completed, pending, rescheduled, adesivado, cancelled } = getStatusCounts(teamServiceOrders);
           const allServicesCompleted = teamServiceOrders.length > 0 && pending === 0 && rescheduled === 0 && adesivado === 0;
 
@@ -509,7 +716,12 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
             >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex flex-col">
-                  <h3 className="font-semibold text-white">{getTechnicianNames(team.technicianIds)}</h3>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="font-semibold text-white">{getTechnicianNames(team.technicianIds)}</h3>
+                    <span className="text-xs bg-primary px-2 py-1 rounded-full text-white font-medium">
+                      {team.boxNumber}
+                    </span>
+                  </div>
                   {allServicesCompleted && teamServiceOrders.length > 0 && (
                     <span className="text-xs text-green-400 font-medium mt-1">✓ Equipe Livre</span>
                   )}
@@ -564,17 +776,19 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
                     <span className="text-xs text-yellow-400 font-medium mt-1 flex items-center">
                       <AlertTriangle className="mr-1 h-3 w-3" />
                       {team.notes}
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        className="ml-2 p-0 h-auto text-yellow-400 hover:text-yellow-300"
-                        onClick={() => handleStartEditingNotes(team.id, team.notes || "")}
-                        data-testid={`button-edit-notes-${team.name.replace(/\s+/g, "-").toLowerCase()}`}
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
+                      {!team.fromReport && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="ml-2 p-0 h-auto text-yellow-400 hover:text-yellow-300"
+                          onClick={() => handleStartEditingNotes(team.id, team.notes || "")}
+                          data-testid={`button-edit-notes-${team.name.replace(/\s+/g, "-").toLowerCase()}`}
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      )}
                     </span>
-                  ) : (
+                  ) : !team.fromReport ? (
                     <Button
                       size="sm"
                       variant="ghost"
@@ -585,11 +799,8 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
                       <Plus className="mr-1 h-3 w-3" />
                       Adicionar observações
                     </Button>
-                  )}
+                  ) : null}
                 </div>
-                <span className="text-xs bg-primary px-2 py-1 rounded-full text-white">
-                  {team.boxNumber}
-                </span>
               </div>
 
               <div className="flex items-center justify-between mb-4">
