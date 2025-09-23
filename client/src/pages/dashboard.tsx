@@ -53,6 +53,8 @@ export default function Dashboard() {
   const [reportName, setReportName] = useState<string>("");
   const [reportDate, setReportDate] = useState<string>("");
   const [reportShift, setReportShift] = useState<string>("");
+  const [shouldAutoSave, setShouldAutoSave] = useState<boolean>(false);
+  const [reportEditMode, setReportEditMode] = useState<boolean>(false);
 
   const handleReallocation = (teamId: string) => {
     setSelectedTeamId(teamId);
@@ -185,18 +187,22 @@ export default function Dashboard() {
     setReportName(name || "Relat\u00f3rio");
     setReportDate(date || new Date().toISOString().split('T')[0]);
     setReportShift(shift || "Manh\u00e3");
+    setShouldAutoSave(true); // Auto-save for newly generated reports
+    setReportEditMode(false); // Reset edit mode
     setReportModalOpen(false);
     setGeneratedReportModalOpen(true);
   };
 
   const handleViewReport = (reportContent: string) => {
     setGeneratedReportContent(reportContent);
+    setShouldAutoSave(false); // Do not auto-save for viewing existing reports
     setGeneratedReportModalOpen(true);
   };
 
   const handleEditReport = () => {
     setGeneratedReportModalOpen(false);
-    setEditDayServicesModalOpen(true);
+    setReportEditMode(true);
+    setReportModalOpen(true);
   };
 
   const handleServicesUpdated = () => {
@@ -250,6 +256,10 @@ export default function Dashboard() {
         open={reportModalOpen}
         onOpenChange={setReportModalOpen}
         onReportGenerated={handleReportGenerated}
+        editMode={reportEditMode}
+        existingReportName={reportName}
+        existingReportDate={reportDate}
+        existingReportShift={reportShift}
       />
 
       <GeneratedReportModal
@@ -260,6 +270,7 @@ export default function Dashboard() {
         reportDate={reportDate}
         reportShift={reportShift}
         onEditReport={handleEditReport}
+        shouldAutoSave={shouldAutoSave}
       />
 
 

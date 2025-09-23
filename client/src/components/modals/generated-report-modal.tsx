@@ -14,6 +14,7 @@ interface GeneratedReportModalProps {
   reportDate?: string;
   reportShift?: string;
   onEditReport?: () => void;
+  shouldAutoSave?: boolean;
 }
 
 export default function GeneratedReportModal({ 
@@ -23,7 +24,8 @@ export default function GeneratedReportModal({
   reportName = "Relatório", 
   reportDate = new Date().toISOString().split('T')[0], 
   reportShift = "Manhã",
-  onEditReport
+  onEditReport,
+  shouldAutoSave = false
 }: GeneratedReportModalProps) {
   const [copied, setCopied] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -57,9 +59,9 @@ export default function GeneratedReportModal({
     }
   });
 
-  // Auto-save report when modal opens with content (only once per modal session)
+  // Auto-save report when modal opens with content (only once per modal session and only if shouldAutoSave is true)
   useEffect(() => {
-    if (open && reportContent && !hasAutoSaved.current) {
+    if (open && reportContent && shouldAutoSave && !hasAutoSaved.current) {
       hasAutoSaved.current = true;
       saveReportMutation.mutate();
     }
@@ -69,7 +71,7 @@ export default function GeneratedReportModal({
       hasAutoSaved.current = false;
       setSaved(false);
     }
-  }, [open, reportContent]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, reportContent, shouldAutoSave]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const copyToClipboard = async () => {
     try {

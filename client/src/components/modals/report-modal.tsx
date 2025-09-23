@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { X, Plus, Trash2, MapPin, Home, Edit3, Check, Users } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -15,6 +15,10 @@ interface ReportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onReportGenerated: (content: string, name?: string, date?: string, shift?: string) => void;
+  editMode?: boolean;
+  existingReportName?: string;
+  existingReportDate?: string;
+  existingReportShift?: string;
 }
 
 interface NewServiceOrder {
@@ -32,7 +36,15 @@ interface BoxData {
   serviceOrders: NewServiceOrder[];
 }
 
-export default function ReportModal({ open, onOpenChange, onReportGenerated }: ReportModalProps) {
+export default function ReportModal({ 
+  open, 
+  onOpenChange, 
+  onReportGenerated, 
+  editMode = false,
+  existingReportName = "",
+  existingReportDate = "",
+  existingReportShift = ""
+}: ReportModalProps) {
   const [reportName, setReportName] = useState("");
   const [reportDate, setReportDate] = useState("");
   const [shift, setShift] = useState("");
@@ -59,6 +71,39 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
   const { data: technicians = [] } = useQuery<Technician[]>({
     queryKey: ["/api/technicians"]
   });
+
+  // Initialize fields when in edit mode
+  useEffect(() => {
+    if (open && editMode) {
+      setReportName(existingReportName);
+      setReportDate(existingReportDate);
+      setShift(existingReportShift);
+      
+      // Load existing teams as boxes when editing
+      const existingBoxes: BoxData[] = teams.map(team => ({
+        boxNumber: team.boxNumber,
+        technicianIds: team.technicianIds,
+        teamId: team.id,
+        serviceOrders: serviceOrders
+          .filter(order => order.teamId === team.id)
+          .map(order => ({
+            code: order.code,
+            type: order.type,
+            alert: order.alert || "",
+            cityId: order.address || "", // Using address field for now
+            neighborhoodId: order.address || ""
+          }))
+      }));
+      setBoxes(existingBoxes);
+    } else if (open && !editMode) {
+      // Reset fields for new report
+      setReportName("");
+      setReportDate(new Date().toISOString().split('T')[0]);
+      setShift("");
+      setBoxes([]);
+      setSelectedBoxIndex(null);
+    }
+  }, [open, editMode, existingReportName, existingReportDate, existingReportShift, teams, serviceOrders]);
 
   const createServiceOrderMutation = useMutation({
     mutationFn: async (orderWithAssignment: NewServiceOrder & { technicianId: string; teamId?: string }) => {
@@ -454,7 +499,7 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
         <DialogHeader className="flex-shrink-0">
           <div className="flex items-center justify-between">
             <DialogTitle className="text-xl font-semibold text-white">
-              Novo Relatório
+              {editMode ? "Editar Relatório" : "Novo Relatório"}
             </DialogTitle>
             <Button
               variant="ghost"
@@ -850,7 +895,7 @@ export default function ReportModal({ open, onOpenChange, onReportGenerated }: R
             disabled={!reportName || !reportDate || !shift || boxes.filter(box => box.boxNumber.trim() !== "" && box.technicianIds.length > 0).length === 0 || createServiceOrderMutation.isPending}
             data-testid="button-generate-report"
           >
-            Gerar Relatório
+            {editMode ? "Atualizar Relatório" : "Gerar Relatório"}
           </Button>
         </div>
       </DialogContent>
