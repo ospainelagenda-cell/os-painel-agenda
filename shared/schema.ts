@@ -34,6 +34,8 @@ export const serviceOrders = pgTable("service_orders", {
   customerPhone: text("customer_phone"), // Customer phone
   address: text("address"), // Service address
   description: text("description"), // Additional service description
+  cityId: varchar("city_id").references(() => cities.id), // City where service is performed
+  neighborhoodId: varchar("neighborhood_id").references(() => neighborhoods.id), // Neighborhood where service is performed
   reminderEnabled: boolean("reminder_enabled").default(true), // Enable reminder
   createdViaCalendar: boolean("created_via_calendar").default(false), // Created through calendar scheduling
   createdAt: timestamp("created_at").defaultNow(),

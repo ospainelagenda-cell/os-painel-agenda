@@ -62,8 +62,8 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
   // Time-reactive state
   const currentTime = useCurrentTime();
   
-  // Filter state
-  const [filterMode, setFilterMode] = useState<'auto' | 'manual'>('auto');
+  // Filter state - Default to manual mode showing all dates
+  const [filterMode, setFilterMode] = useState<'auto' | 'manual'>('manual');
   const [selectedDate, setSelectedDate] = useState('all');
   
   const [editingNotes, setEditingNotes] = useState<string | null>(null);

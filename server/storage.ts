@@ -93,7 +93,82 @@ export class MemStorage implements IStorage {
   }
 
   private async initializeSampleData() {
-    // Create sample technicians first
+    // Create default cities first
+    const ubaCity = await this.createCity({ name: "UBA-MG" });
+    const tocantinsCity = await this.createCity({ name: "TOCANTINS-MG" });
+
+    // Create neighborhoods for UBA-MG
+    const ubaNeighborhoods = [
+      "Aeroporto", "Agostinho Sales Amato", "Agroceres", "Alto Santa Cruz", "Antonina Coelho", 
+      "Antônio Bigonha", "Antônio Maranhão", "Área Rural de Ubá", "Bambuí", "Bela Vista", 
+      "Belvedere", "Boa Vista", "Bom Pastor", "Caxangá", "Centro", "Chiquito Gazolla", 
+      "Cidade Carinho II", "Cidade Jardim", "Cittá de Lucca", "Colina do Jardim Glória", 
+      "Concórdia", "Copacabana", "Cristal", "Cristo Redentor", "Cruzeiro", "da Luz", 
+      "Derminas", "Dico Teixeira", "dos Vaz", "Eldorado", "Encosta do Sol", "Encosta do Sol II", 
+      "Fazendinha", "Galdino Alvim", "Habitat I", "Industrial", "Jardim Alves do Vale", 
+      "Jardim Élida", "Jardim Esperança", "Jardim Glória", "Jardim Inês Groppo", 
+      "Jardim Manacás", "Jardim Primavera", "Laranjal", "Laurindo de Castro", "Lavapés", 
+      "Loteamento Santos Dumont", "Louriçal", "Major Fusaro", "Mangueira Rural", 
+      "Mateus Schetino", "Meu Sonho", "Noeme Batalha", "Nossa Senhora de Fátima", 
+      "Novo Horizonte", "Novo Primavera", "Olaria", "Olinda", "Oséas Maranhão", "Palmeiras", 
+      "Paulino Fernandes", "Paulino Fernandes III", "Paulino Fernandes IV", "Pedro Miquelito", 
+      "Peixoto Filho", "Peluso", "Ponte Preta", "Portal das Mangueiras", "Quinta das Paineiras", 
+      "Residencial Altair Rocha", "Residencial Estrela Sul", "Residencial Jardim Europa", 
+      "Residencial Monte Belo", "Residencial Pires da Luz", "Residencial Quinze de Novembro", 
+      "Residencial Rosa de Toledo", "Residencial São José", "Residencial São Leopoldo", 
+      "Residencial São Lucas", "San Raphael I", "San Raphael II", "San Raphael III", 
+      "Santa Alice", "Santa Bernadete", "Santa Cândida", "Santa Clara", "Santa Cruz", 
+      "Santa Edwiges", "Santa Edwiges II", "Santa Luzia", "Santa Rosa", "Santa Terezinha", 
+      "Santana", "Santo Antônio", "São Domingos", "São Francisco de Assis", "São João", 
+      "São José", "São Judas Tadeu", "São Mateus", "São Pedro", "São Sebastião", "Seminário", 
+      "Sobradinho", "Sol Nascente", "Talma", "Tanquinho Doutor José Cavaliere", 
+      "Tanquinho João Teixeira", "Universitário", "Vale do Ipê", "Vila Casal", "Vila Franel", 
+      "Vila Gonçalves", "Vila Mariah", "Vila Moreira", "Vila Regina", "Vitória", 
+      "Waldemar de Castro", "Xangrilá"
+    ];
+
+    for (const neighborhoodName of ubaNeighborhoods) {
+      await this.createNeighborhood({ 
+        name: neighborhoodName, 
+        cityId: ubaCity.id 
+      });
+    }
+
+    // Create neighborhoods for TOCANTINS-MG
+    const tocantinsNeighborhoods = [
+      "ALTO DA BOA VISTA", "BELA VISTA", "BOA VISTA", "CENTRO", "IMPERIAL", 
+      "PATRIMONIO", "GRAMA", "FLORESTA", "GINASIO", "ESPLANADA", 
+      "TEIXEIRA DE MELO", "SÃO GABRIEL", "VARZEA", "MORRO GRANDE"
+    ];
+
+    for (const neighborhoodName of tocantinsNeighborhoods) {
+      await this.createNeighborhood({ 
+        name: neighborhoodName, 
+        cityId: tocantinsCity.id 
+      });
+    }
+
+    // Get neighborhood IDs for sample data
+    const centroUbaId = Array.from(this.neighborhoods.values()).find(n => n.name === "Centro" && n.cityId === ubaCity.id)?.id;
+    const santaCruzUbaId = Array.from(this.neighborhoods.values()).find(n => n.name === "Santa Cruz" && n.cityId === ubaCity.id)?.id;
+    const bomPastorUbaId = Array.from(this.neighborhoods.values()).find(n => n.name === "Bom Pastor" && n.cityId === ubaCity.id)?.id;
+    const jardimPrimaveraId = Array.from(this.neighborhoods.values()).find(n => n.name === "Jardim Primavera" && n.cityId === ubaCity.id)?.id;
+    const saoPedroId = Array.from(this.neighborhoods.values()).find(n => n.name === "São Pedro" && n.cityId === ubaCity.id)?.id;
+    const belaVistaUbaId = Array.from(this.neighborhoods.values()).find(n => n.name === "Bela Vista" && n.cityId === ubaCity.id)?.id;
+    const industrialId = Array.from(this.neighborhoods.values()).find(n => n.name === "Industrial" && n.cityId === ubaCity.id)?.id;
+    const pelusoId = Array.from(this.neighborhoods.values()).find(n => n.name === "Peluso" && n.cityId === ubaCity.id)?.id;
+    const laranjal = Array.from(this.neighborhoods.values()).find(n => n.name === "Laranjal" && n.cityId === ubaCity.id)?.id;
+    const universitarioId = Array.from(this.neighborhoods.values()).find(n => n.name === "Universitário" && n.cityId === ubaCity.id)?.id;
+    const palmeirasId = Array.from(this.neighborhoods.values()).find(n => n.name === "Palmeiras" && n.cityId === ubaCity.id)?.id;
+    const cristalId = Array.from(this.neighborhoods.values()).find(n => n.name === "Cristal" && n.cityId === ubaCity.id)?.id;
+    const santaTeresinhaId = Array.from(this.neighborhoods.values()).find(n => n.name === "Santa Terezinha" && n.cityId === ubaCity.id)?.id;
+    const saoJoseId = Array.from(this.neighborhoods.values()).find(n => n.name === "São José" && n.cityId === ubaCity.id)?.id;
+    const vitoriaId = Array.from(this.neighborhoods.values()).find(n => n.name === "Vitória" && n.cityId === ubaCity.id)?.id;
+    const centroTocantinsId = Array.from(this.neighborhoods.values()).find(n => n.name === "CENTRO" && n.cityId === tocantinsCity.id)?.id;
+    const boaVistaTocantinsId = Array.from(this.neighborhoods.values()).find(n => n.name === "BOA VISTA" && n.cityId === tocantinsCity.id)?.id;
+    const patrimonioId = Array.from(this.neighborhoods.values()).find(n => n.name === "PATRIMONIO" && n.cityId === tocantinsCity.id)?.id;
+
+    // Create sample technicians
     const technician1 = await this.createTechnician({
       name: "Hugo Silva",
       cities: ["UBA-MG"],
@@ -158,7 +233,7 @@ export class MemStorage implements IStorage {
       notes: ""
     });
 
-    // Create sample service orders
+    // Create sample service orders with city and neighborhood information
     await this.createServiceOrder({
       code: "139390",
       type: "ATIVAÇÃO",
@@ -170,7 +245,9 @@ export class MemStorage implements IStorage {
       customerName: "João Silva",
       customerPhone: "(11) 99999-1234",
       address: "Rua das Flores, 123 - Centro",
-      description: "Ativação de linha residencial"
+      description: "Ativação de linha residencial",
+      cityId: ubaCity.id,
+      neighborhoodId: centroUbaId
     });
 
     await this.createServiceOrder({
@@ -183,7 +260,9 @@ export class MemStorage implements IStorage {
       scheduledTime: "14:30",
       customerName: "Maria Santos",
       customerPhone: "(11) 88888-5678",
-      address: "Av. Principal, 456 - Vila Nova"
+      address: "Av. Principal, 456 - Vila Nova",
+      cityId: ubaCity.id,
+      neighborhoodId: santaCruzUbaId
     });
 
     await this.createServiceOrder({
@@ -191,7 +270,9 @@ export class MemStorage implements IStorage {
       type: "UPGRADE",
       status: "Pendente",
       teamId: team1.id,
-      scheduledDate: "2025-09-06"
+      scheduledDate: "2025-09-06",
+      cityId: ubaCity.id,
+      neighborhoodId: bomPastorUbaId
     });
 
     await this.createServiceOrder({
@@ -199,7 +280,9 @@ export class MemStorage implements IStorage {
       type: "T.EQUIPAMENTO",
       status: "Concluído",
       teamId: team2.id,
-      scheduledDate: "2025-09-05"
+      scheduledDate: "2025-09-05",
+      cityId: ubaCity.id,
+      neighborhoodId: industrialId
     });
 
     await this.createServiceOrder({
@@ -207,7 +290,9 @@ export class MemStorage implements IStorage {
       type: "LOSS",
       status: "Pendente",
       teamId: team2.id,
-      scheduledDate: "2025-09-06"
+      scheduledDate: "2025-09-06",
+      cityId: tocantinsCity.id,
+      neighborhoodId: centroTocantinsId
     });
 
     await this.createServiceOrder({
@@ -215,7 +300,9 @@ export class MemStorage implements IStorage {
       type: "LOSS",
       status: "Concluído",
       teamId: team3.id,
-      scheduledDate: "2025-09-05"
+      scheduledDate: "2025-09-05",
+      cityId: ubaCity.id,
+      neighborhoodId: universitarioId
     });
 
     await this.createServiceOrder({
@@ -223,7 +310,9 @@ export class MemStorage implements IStorage {
       type: "LOSS",
       status: "Concluído",
       teamId: team3.id,
-      scheduledDate: "2025-09-05"
+      scheduledDate: "2025-09-05",
+      cityId: ubaCity.id,
+      neighborhoodId: santaTeresinhaId
     });
 
     await this.createServiceOrder({
@@ -237,63 +326,10 @@ export class MemStorage implements IStorage {
       customerName: "Carlos Oliveira",
       customerPhone: "(11) 77777-9999",
       address: "Rua das Palmeiras, 789 - Jardim São Paulo",
-      description: "Verificar conexão de fibra óptica"
+      description: "Verificar conexão de fibra óptica",
+      cityId: ubaCity.id,
+      neighborhoodId: jardimPrimaveraId
     });
-
-    // Create default cities
-    const ubaCity = await this.createCity({ name: "UBA-MG" });
-    const tocantinsCity = await this.createCity({ name: "TOCANTINS-MG" });
-
-    // Create neighborhoods for UBA-MG
-    const ubaNeighborhoods = [
-      "Aeroporto", "Agostinho Sales Amato", "Agroceres", "Alto Santa Cruz", "Antonina Coelho", 
-      "Antônio Bigonha", "Antônio Maranhão", "Área Rural de Ubá", "Bambuí", "Bela Vista", 
-      "Belvedere", "Boa Vista", "Bom Pastor", "Caxangá", "Centro", "Chiquito Gazolla", 
-      "Cidade Carinho II", "Cidade Jardim", "Cittá de Lucca", "Colina do Jardim Glória", 
-      "Concórdia", "Copacabana", "Cristal", "Cristo Redentor", "Cruzeiro", "da Luz", 
-      "Derminas", "Dico Teixeira", "dos Vaz", "Eldorado", "Encosta do Sol", "Encosta do Sol II", 
-      "Fazendinha", "Galdino Alvim", "Habitat I", "Industrial", "Jardim Alves do Vale", 
-      "Jardim Élida", "Jardim Esperança", "Jardim Glória", "Jardim Inês Groppo", 
-      "Jardim Manacás", "Jardim Primavera", "Laranjal", "Laurindo de Castro", "Lavapés", 
-      "Loteamento Santos Dumont", "Louriçal", "Major Fusaro", "Mangueira Rural", 
-      "Mateus Schetino", "Meu Sonho", "Noeme Batalha", "Nossa Senhora de Fátima", 
-      "Novo Horizonte", "Novo Primavera", "Olaria", "Olinda", "Oséas Maranhão", "Palmeiras", 
-      "Paulino Fernandes", "Paulino Fernandes III", "Paulino Fernandes IV", "Pedro Miquelito", 
-      "Peixoto Filho", "Peluso", "Ponte Preta", "Portal das Mangueiras", "Quinta das Paineiras", 
-      "Residencial Altair Rocha", "Residencial Estrela Sul", "Residencial Jardim Europa", 
-      "Residencial Monte Belo", "Residencial Pires da Luz", "Residencial Quinze de Novembro", 
-      "Residencial Rosa de Toledo", "Residencial São José", "Residencial São Leopoldo", 
-      "Residencial São Lucas", "San Raphael I", "San Raphael II", "San Raphael III", 
-      "Santa Alice", "Santa Bernadete", "Santa Cândida", "Santa Clara", "Santa Cruz", 
-      "Santa Edwiges", "Santa Edwiges II", "Santa Luzia", "Santa Rosa", "Santa Terezinha", 
-      "Santana", "Santo Antônio", "São Domingos", "São Francisco de Assis", "São João", 
-      "São José", "São Judas Tadeu", "São Mateus", "São Pedro", "São Sebastião", "Seminário", 
-      "Sobradinho", "Sol Nascente", "Talma", "Tanquinho Doutor José Cavaliere", 
-      "Tanquinho João Teixeira", "Universitário", "Vale do Ipê", "Vila Casal", "Vila Franel", 
-      "Vila Gonçalves", "Vila Mariah", "Vila Moreira", "Vila Regina", "Vitória", 
-      "Waldemar de Castro", "Xangrilá"
-    ];
-
-    for (const neighborhoodName of ubaNeighborhoods) {
-      await this.createNeighborhood({ 
-        name: neighborhoodName, 
-        cityId: ubaCity.id 
-      });
-    }
-
-    // Create neighborhoods for TOCANTINS-MG
-    const tocantinsNeighborhoods = [
-      "ALTO DA BOA VISTA", "BELA VISTA", "BOA VISTA", "CENTRO", "IMPERIAL", 
-      "PATRIMONIO", "GRAMA", "FLORESTA", "GINASIO", "ESPLANADA", 
-      "TEIXEIRA DE MELO", "SÃO GABRIEL", "VARZEA", "MORRO GRANDE"
-    ];
-
-    for (const neighborhoodName of tocantinsNeighborhoods) {
-      await this.createNeighborhood({ 
-        name: neighborhoodName, 
-        cityId: tocantinsCity.id 
-      });
-    }
 
     // Create sample service types
     await this.createServiceType({ name: "ATIVAÇÃO" });
@@ -485,7 +521,9 @@ Taxa de conclusão: 92.7%`
       customerPhone: insertServiceOrder.customerPhone || null,
       address: insertServiceOrder.address || null,
       description: insertServiceOrder.description || null,
-      reminderEnabled: insertServiceOrder.reminderEnabled || true,
+      cityId: insertServiceOrder.cityId || null,
+      neighborhoodId: insertServiceOrder.neighborhoodId || null,
+      reminderEnabled: insertServiceOrder.reminderEnabled ?? true,
       createdViaCalendar: insertServiceOrder.createdViaCalendar || false,
       status: insertServiceOrder.status || "Pendente"
     };
