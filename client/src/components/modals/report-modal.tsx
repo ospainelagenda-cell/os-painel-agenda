@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Plus, Trash2, MapPin, Home, Edit3, Check, Users } from "lucide-react";
+import { X, Plus, Trash2, MapPin, Home, Edit3, Check, Users, Package } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -267,7 +267,23 @@ export default function ReportModal({
   });
 
   const addBox = () => {
-    const newBoxNumber = `caixa-${boxes.length + 1}`;
+    // Encontrar o próximo número de caixa disponível (01 a 30)
+    const existingBoxNumbers = boxes.map(box => {
+      const match = box.boxNumber.match(/caixa-(\d+)/i) || box.boxNumber.match(/^(\d+)$/);
+      return match ? parseInt(match[1], 10) : 0;
+    }).filter(num => num > 0);
+    
+    let nextBoxNumber = 1;
+    while (existingBoxNumbers.includes(nextBoxNumber) && nextBoxNumber <= 30) {
+      nextBoxNumber++;
+    }
+    
+    if (nextBoxNumber > 30) {
+      toast({ title: "Limite máximo de 30 caixas atingido", variant: "destructive" });
+      return;
+    }
+    
+    const newBoxNumber = `CAIXA-${nextBoxNumber.toString().padStart(2, '0')}`;
     setBoxes(prev => [...prev, { boxNumber: newBoxNumber, technicianIds: [], serviceOrders: [] }]);
   };
 
@@ -520,14 +536,15 @@ export default function ReportModal({
     content += "-".repeat(57) + "\n\n";
 
     // Agrupar por Caixa → Técnicos → Service Orders
+    // Usar o estado local das caixas (box.serviceOrders) como fonte da verdade
     validBoxes.forEach(box => {
-      // Encontrar service orders para técnicos desta caixa na data especificada
-      const boxOrders = (updatedServiceOrders as ServiceOrder[]).filter(order => 
-        order.technicianId && box.technicianIds.includes(order.technicianId) && 
-        order.scheduledDate === reportDate
+      // Usar as ordens de serviço do estado local da caixa (reflete exatamente o que o usuário configurou)
+      const boxOrders = box.serviceOrders.filter(order => 
+        order.code && order.code.trim() !== '' && order.type && order.type.trim() !== ''
       );
       
-      if (boxOrders.length > 0) {
+      // Só exibir caixas que têm ordens de serviço OU técnicos (para mostrar caixas com técnicos mesmo sem O.S.)
+      if (boxOrders.length > 0 || box.technicianIds.length > 0) {
         // Encontrar nomes dos técnicos desta caixa
         const technicianNames = box.technicianIds
           .map(technicianId => {
@@ -542,7 +559,7 @@ export default function ReportModal({
         
         content += `${technicianNames}: (CAIXA - ${boxNumberFormatted})\n`;
         
-        // Coletar todas as ordens desta caixa (de todos os técnicos)
+        // Coletar todas as ordens desta caixa (usar estado local)
         boxOrders.forEach(order => {
           content += `- ${order.code} ${order.type}\n`;
         });
@@ -582,6 +599,12 @@ export default function ReportModal({
   const addNewServiceOrder = () => {
     if (selectedBoxIndex === null) {
       toast({ title: "Selecione uma caixa para adicionar ordens de serviço", variant: "destructive" });
+      return;
+    }
+    
+    const currentBox = boxes[selectedBoxIndex];
+    if (currentBox && currentBox.serviceOrders.length >= 30) {
+      toast({ title: "Máximo de 30 ordens de serviço por caixa", variant: "destructive" });
       return;
     }
     
@@ -714,10 +737,11 @@ export default function ReportModal({
                 type="button"
                 className="glass-button px-3 py-2 rounded-lg text-white text-sm"
                 onClick={addBox}
+                disabled={boxes.length >= 30}
                 data-testid="button-add-box"
               >
                 <Plus className="mr-1 h-4 w-4" />
-                Adicionar Caixa
+                Adicionar Caixa ({boxes.length}/30)
               </Button>
             </div>
             
@@ -774,6 +798,7 @@ export default function ReportModal({
                         }`}
                         data-testid={`button-box-${index}`}
                       >
+                        <Package className="h-4 w-4 mr-2" />
                         {box.boxNumber}
                       </button>
                       <button
@@ -1084,6 +1109,11 @@ export default function ReportModal({
                         if (selectedBoxIndex === null) return;
                         const currentTechnicians = boxes[selectedBoxIndex]?.technicianIds || [];
                         if (e.target.checked) {
+                          // Verificar limite máximo de 4 técnicos por caixa
+                          if (currentTechnicians.length >= 4) {
+                            toast({ title: "Máximo de 4 técnicos por caixa", variant: "destructive" });
+                            return;
+                          }
                           updateBoxTechnicians(selectedBoxIndex, [...currentTechnicians, technician.id]);
                         } else {
                           updateBoxTechnicians(selectedBoxIndex, currentTechnicians.filter(id => id !== technician.id));
