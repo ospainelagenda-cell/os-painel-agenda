@@ -559,7 +559,9 @@ Taxa de conclusão: 92.7%`
     const report: Report = { 
       ...insertReport, 
       id, 
-      createdAt: new Date()
+      createdAt: new Date(),
+      boxes: insertReport.boxes || null,
+      metadata: insertReport.metadata || null
     };
     this.reports.set(id, report);
     return report;

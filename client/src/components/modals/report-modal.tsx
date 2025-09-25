@@ -59,6 +59,8 @@ export default function ReportModal({
   const [editingBoxIndex, setEditingBoxIndex] = useState<number | null>(null);
   const [editingBoxValue, setEditingBoxValue] = useState("");
   const [technicianModalOpen, setTechnicianModalOpen] = useState(false);
+  const [boxNumberModalOpen, setBoxNumberModalOpen] = useState(false);
+  const [selectedBoxNumber, setSelectedBoxNumber] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -267,24 +269,65 @@ export default function ReportModal({
   });
 
   const addBox = () => {
-    // Encontrar o próximo número de caixa disponível (01 a 30)
+    // Verificar se já temos 30 caixas
+    if (boxes.length >= 30) {
+      toast({ title: "Limite máximo de 30 caixas atingido", variant: "destructive" });
+      return;
+    }
+
+    // Abrir modal para selecionar número da caixa
+    setSelectedBoxNumber("");
+    setBoxNumberModalOpen(true);
+  };
+
+  const confirmAddBox = () => {
+    const numericBoxNumber = parseInt(selectedBoxNumber, 10);
+    
+    // Validar o número
+    if (isNaN(numericBoxNumber) || numericBoxNumber < 1 || numericBoxNumber > 30) {
+      toast({ title: "Número inválido. Digite um número entre 1 e 30.", variant: "destructive" });
+      return;
+    }
+    
+    // Verificar se o número já existe
     const existingBoxNumbers = boxes.map(box => {
       const match = box.boxNumber.match(/caixa-(\d+)/i) || box.boxNumber.match(/^(\d+)$/);
       return match ? parseInt(match[1], 10) : 0;
     }).filter(num => num > 0);
     
-    let nextBoxNumber = 1;
-    while (existingBoxNumbers.includes(nextBoxNumber) && nextBoxNumber <= 30) {
-      nextBoxNumber++;
-    }
-    
-    if (nextBoxNumber > 30) {
-      toast({ title: "Limite máximo de 30 caixas atingido", variant: "destructive" });
+    if (existingBoxNumbers.includes(numericBoxNumber)) {
+      toast({ title: `CAIXA-${numericBoxNumber.toString().padStart(2, '0')} já existe!`, variant: "destructive" });
       return;
     }
     
-    const newBoxNumber = `CAIXA-${nextBoxNumber.toString().padStart(2, '0')}`;
+    const newBoxNumber = `CAIXA-${numericBoxNumber.toString().padStart(2, '0')}`;
     setBoxes(prev => [...prev, { boxNumber: newBoxNumber, technicianIds: [], serviceOrders: [] }]);
+    setBoxNumberModalOpen(false);
+    setSelectedBoxNumber("");
+    toast({ title: `${newBoxNumber} criada com sucesso!` });
+  };
+
+  const handleNumberClick = (number: string) => {
+    if (selectedBoxNumber.length < 2) {
+      setSelectedBoxNumber(selectedBoxNumber + number);
+    }
+  };
+
+  const handleBackspace = () => {
+    setSelectedBoxNumber(prev => prev.slice(0, -1));
+  };
+
+  const handleClear = () => {
+    setSelectedBoxNumber("");
+  };
+
+  const getAvailableNumbers = () => {
+    const existingBoxNumbers = boxes.map(box => {
+      const match = box.boxNumber.match(/caixa-(\d+)/i) || box.boxNumber.match(/^(\d+)$/);
+      return match ? parseInt(match[1], 10) : 0;
+    }).filter(num => num > 0);
+    
+    return Array.from({ length: 30 }, (_, i) => i + 1).filter(num => !existingBoxNumbers.includes(num));
   };
 
   const removeBox = (index: number) => {
@@ -1162,6 +1205,127 @@ export default function ReportModal({
               >
                 <X className="mr-2 h-4 w-4" />
                 Fechar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Seleção de Número da Caixa */}
+      <Dialog open={boxNumberModalOpen} onOpenChange={setBoxNumberModalOpen}>
+        <DialogContent className="glass-card border-border/30 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+              <Package className="h-5 w-5 text-blue-400" />
+              Escolher Número da Caixa
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Display do número selecionado */}
+            <div className="text-center">
+              <div className="glass-card p-6 rounded-lg border border-border/30">
+                <Label className="text-sm text-muted-foreground block mb-2">Número da Caixa:</Label>
+                <div className="text-4xl font-bold text-white min-h-[1.2em] flex items-center justify-center">
+                  {selectedBoxNumber || "00"}
+                </div>
+                <div className="text-sm text-muted-foreground mt-2">
+                  Resultado: CAIXA-{(selectedBoxNumber || "00").padStart(2, '0')}
+                </div>
+              </div>
+            </div>
+
+            {/* Números disponíveis (seleção rápida) */}
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground block mb-3">
+                Números Disponíveis (clique para selecionar):
+              </Label>
+              <div className="grid grid-cols-6 gap-2 max-h-32 overflow-y-auto">
+                {getAvailableNumbers().slice(0, 30).map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => setSelectedBoxNumber(num.toString())}
+                    className={`glass-button p-2 rounded-lg text-sm font-medium transition-all hover:bg-blue-500/20 hover:border-blue-400 ${
+                      selectedBoxNumber === num.toString()
+                        ? 'bg-blue-600 border-blue-500 text-white'
+                        : 'text-white border-border/30'
+                    }`}
+                  >
+                    {num.toString().padStart(2, '0')}
+                  </button>
+                ))}
+              </div>
+              {getAvailableNumbers().length === 0 && (
+                <div className="text-center py-4 text-muted-foreground text-sm">
+                  Todas as caixas já foram criadas
+                </div>
+              )}
+            </div>
+
+            {/* Teclado Numérico */}
+            <div>
+              <Label className="text-sm font-medium text-muted-foreground block mb-3">
+                Ou digite manualmente:
+              </Label>
+              <div className="grid grid-cols-3 gap-3">
+                {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                  <button
+                    key={num}
+                    type="button"
+                    onClick={() => handleNumberClick(num.toString())}
+                    className="glass-button p-4 rounded-lg text-lg font-medium text-white hover:bg-blue-500/20 hover:border-blue-400 transition-all"
+                    disabled={selectedBoxNumber.length >= 2}
+                  >
+                    {num}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="glass-button p-4 rounded-lg text-sm font-medium text-white hover:bg-red-500/20 hover:border-red-400 transition-all"
+                >
+                  Limpar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleNumberClick('0')}
+                  className="glass-button p-4 rounded-lg text-lg font-medium text-white hover:bg-blue-500/20 hover:border-blue-400 transition-all"
+                  disabled={selectedBoxNumber.length >= 2}
+                >
+                  0
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBackspace}
+                  className="glass-button p-4 rounded-lg text-sm font-medium text-white hover:bg-yellow-500/20 hover:border-yellow-400 transition-all"
+                >
+                  ⌫
+                </button>
+              </div>
+            </div>
+
+            {/* Botões de ação */}
+            <div className="flex justify-end space-x-3 pt-4 border-t border-border/20">
+              <Button
+                type="button"
+                className="glass-button hover:bg-white/10 border border-border/30 px-6 py-2 rounded-lg text-white transition-all duration-200"
+                onClick={() => {
+                  setBoxNumberModalOpen(false);
+                  setSelectedBoxNumber("");
+                }}
+              >
+                <X className="mr-2 h-4 w-4" />
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                className="bg-primary hover:bg-primary/90 px-6 py-2 rounded-lg text-white font-medium transition-all duration-200"
+                onClick={confirmAddBox}
+                disabled={!selectedBoxNumber || parseInt(selectedBoxNumber) < 1 || parseInt(selectedBoxNumber) > 30}
+              >
+                <Package className="mr-2 h-4 w-4" />
+                Criar Caixa
               </Button>
             </div>
           </div>

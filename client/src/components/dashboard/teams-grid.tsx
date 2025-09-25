@@ -475,21 +475,26 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
     // For dynamic teams, match by technician IDs and/or boxNumber; for static teams, match by team ID
     const matchesTeam = (order: ServiceOrder) => {
       if (teamId.startsWith('dynamic-') && technicianIds) {
-        // For dynamic teams, check multiple conditions:
-        // 1. Direct technician match
-        // 2. Team match (any technician from this dynamic team belongs to the order's team)
-        // 3. Box number match (if available)
-        const directTechMatch = technicianIds.includes(order.technicianId || '');
-        const teamMatch = technicianIds.some(techId => order.teamId === teams.find(t => t.technicianIds.includes(techId))?.id);
+        // For dynamic teams, check conditions in priority order:
+        // 1. If service has a teamId, check if any of our technicians belong to that team
+        if (order.teamId) {
+          const serviceTeam = teams.find(t => t.id === order.teamId);
+          if (serviceTeam) {
+            // Check if any of our technicians are in the service's assigned team
+            const hasCommonTechnician = technicianIds.some(techId => serviceTeam.technicianIds.includes(techId));
+            if (hasCommonTechnician) {
+              return true;
+            }
+          }
+        }
         
-        // Normalize box numbers for comparison (remove "CAIXA-", trim, zero-pad)
-        const normalizeBoxNumber = (boxNum: string) => {
-          return boxNum.replace(/^CAIXA\s*-?\s*/i, '').trim().padStart(2, '0');
-        };
-        const boxMatch = boxNumber && teams.find(t => t.id === order.teamId)?.boxNumber && 
-          normalizeBoxNumber(boxNumber) === normalizeBoxNumber(teams.find(t => t.id === order.teamId)?.boxNumber || '');
+        // 2. Direct technician match (if no team assignment)
+        if (!order.teamId && order.technicianId) {
+          return technicianIds.includes(order.technicianId);
+        }
         
-        return directTechMatch || teamMatch || boxMatch;
+        // 3. No team or technician assignment - don't match to avoid duplicates
+        return false;
       }
       // For static teams, use original logic
       return order.teamId === teamId;
