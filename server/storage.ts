@@ -702,5 +702,7 @@ Taxa de conclusão: 92.7%`
   }
 }
 
-// Temporarily using MemStorage until PostgreSQL connection issues are resolved
-export const storage = new MemStorage();
+import { DatabaseStorage } from "./db-storage";
+
+// Use DatabaseStorage for production database
+export const storage = new DatabaseStorage();
