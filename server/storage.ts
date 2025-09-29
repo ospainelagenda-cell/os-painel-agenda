@@ -702,4 +702,5 @@ Taxa de conclusão: 92.7%`
   }
 }
 
+// Temporarily using MemStorage until PostgreSQL connection issues are resolved
 export const storage = new MemStorage();

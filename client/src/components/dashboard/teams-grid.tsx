@@ -475,21 +475,38 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
     // For dynamic teams, match by technician IDs and/or boxNumber; for static teams, match by team ID
     const matchesTeam = (order: ServiceOrder) => {
       if (teamId.startsWith('dynamic-') && technicianIds) {
-        // For dynamic teams, check multiple conditions:
-        // 1. Direct technician match
-        // 2. Team match (any technician from this dynamic team belongs to the order's team)
-        // 3. Box number match (if available)
-        const directTechMatch = technicianIds.includes(order.technicianId || '');
-        const teamMatch = technicianIds.some(techId => order.teamId === teams.find(t => t.technicianIds.includes(techId))?.id);
+        // For dynamic teams, use priority-based matching to avoid duplicates:
+        // Priority 1: Direct technician match (most specific)
+        if (order.technicianId && technicianIds.includes(order.technicianId)) {
+          return true;
+        }
         
-        // Normalize box numbers for comparison (remove "CAIXA-", trim, zero-pad)
-        const normalizeBoxNumber = (boxNum: string) => {
-          return boxNum.replace(/^CAIXA\s*-?\s*/i, '').trim().padStart(2, '0');
-        };
-        const boxMatch = boxNumber && teams.find(t => t.id === order.teamId)?.boxNumber && 
-          normalizeBoxNumber(boxNumber) === normalizeBoxNumber(teams.find(t => t.id === order.teamId)?.boxNumber || '');
+        // Priority 2: Team match (if order has a teamId that matches exactly)
+        if (order.teamId) {
+          const orderTeam = teams.find(t => t.id === order.teamId);
+          if (orderTeam) {
+            // Check if this dynamic team exactly matches the order's team
+            const teamTechIds = orderTeam.technicianIds.sort();
+            const currentTechIds = technicianIds.slice().sort();
+            if (teamTechIds.length === currentTechIds.length && 
+                teamTechIds.every((id, index) => id === currentTechIds[index])) {
+              return true;
+            }
+          }
+        }
         
-        return directTechMatch || teamMatch || boxMatch;
+        // Priority 3: Box number match (only if no other team claimed this order)
+        if (boxNumber && order.teamId) {
+          const orderTeam = teams.find(t => t.id === order.teamId);
+          if (orderTeam && orderTeam.boxNumber) {
+            const normalizeBoxNumber = (boxNum: string) => {
+              return boxNum.replace(/^CAIXA\s*-?\s*/i, '').trim().padStart(2, '0');
+            };
+            return normalizeBoxNumber(boxNumber) === normalizeBoxNumber(orderTeam.boxNumber);
+          }
+        }
+        
+        return false;
       }
       // For static teams, use original logic
       return order.teamId === teamId;

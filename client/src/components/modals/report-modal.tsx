@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { X, Plus, Trash2, MapPin, Home, Edit3, Check, Users } from "lucide-react";
+import { X, Plus, Trash2, MapPin, Home, Edit3, Check, Users, Package } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +59,7 @@ export default function ReportModal({
   const [editingBoxIndex, setEditingBoxIndex] = useState<number | null>(null);
   const [editingBoxValue, setEditingBoxValue] = useState("");
   const [technicianModalOpen, setTechnicianModalOpen] = useState(false);
+  const [boxSelectionModalOpen, setBoxSelectionModalOpen] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -267,8 +268,32 @@ export default function ReportModal({
   });
 
   const addBox = () => {
-    const newBoxNumber = `caixa-${boxes.length + 1}`;
-    setBoxes(prev => [...prev, { boxNumber: newBoxNumber, technicianIds: [], serviceOrders: [] }]);
+    setBoxSelectionModalOpen(true);
+  };
+
+  const addBoxWithNumber = (boxNumber: string) => {
+    const formattedBoxNumber = `CAIXA-${boxNumber}`;
+    setBoxes(prev => [...prev, { boxNumber: formattedBoxNumber, technicianIds: [], serviceOrders: [] }]);
+    setBoxSelectionModalOpen(false);
+  };
+
+  const getUsedBoxNumbers = () => {
+    return boxes.map(box => {
+      const match = box.boxNumber.match(/CAIXA-(\d+)/);
+      return match ? match[1] : null;
+    }).filter(Boolean);
+  };
+
+  const getAvailableBoxNumbers = () => {
+    const usedNumbers = getUsedBoxNumbers();
+    const availableNumbers = [];
+    for (let i = 1; i <= 15; i++) {
+      const numberStr = i.toString().padStart(2, '0');
+      if (!usedNumbers.includes(numberStr)) {
+        availableNumbers.push(numberStr);
+      }
+    }
+    return availableNumbers;
   };
 
   const removeBox = (index: number) => {
@@ -767,14 +792,19 @@ export default function ReportModal({
                       <button
                         type="button"
                         onClick={() => setSelectedBoxIndex(selectedBoxIndex === index ? null : index)}
-                        className={`px-4 py-2 rounded-full border text-sm font-medium transition-all ${
+                        className={`px-4 py-3 rounded-full border text-sm font-medium transition-all duration-300 transform hover:scale-105 shadow-lg ${
                           selectedBoxIndex === index
-                            ? 'bg-blue-600 text-white border-blue-600'
-                            : 'bg-secondary text-white border-border hover:border-blue-400'
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-blue-500/30 animate-pulse'
+                            : 'bg-secondary text-white border-border hover:border-blue-400 hover:shadow-blue-400/20'
                         }`}
                         data-testid={`button-box-${index}`}
                       >
-                        {box.boxNumber}
+                        <div className="flex items-center gap-2">
+                          <Package className={`h-4 w-4 transition-transform ${
+                            selectedBoxIndex === index ? 'rotate-12' : 'group-hover:rotate-6'
+                          }`} />
+                          <span className="font-semibold">{box.boxNumber}</span>
+                        </div>
                       </button>
                       <button
                         type="button"
@@ -1132,6 +1162,54 @@ export default function ReportModal({
               >
                 <X className="mr-2 h-4 w-4" />
                 Fechar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Seleção de Caixas */}
+      <Dialog open={boxSelectionModalOpen} onOpenChange={setBoxSelectionModalOpen}>
+        <DialogContent className="glass-card border-border/30 text-white max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-white flex items-center gap-2">
+              <Plus className="h-5 w-5 text-green-400" />
+              Selecionar Número da Caixa
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              {getAvailableBoxNumbers().map((number) => (
+                <button
+                  key={number}
+                  onClick={() => addBoxWithNumber(number)}
+                  className="glass-card p-4 rounded-lg border border-border/30 hover:border-primary/40 text-white hover:bg-white/5 hover:shadow-md transition-all duration-300 transform hover:scale-105 text-center font-medium group"
+                  data-testid={`button-select-box-${number}`}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <Package className="h-5 w-5 text-blue-400 transition-transform group-hover:rotate-12" />
+                    <span className="font-semibold">CAIXA-{number}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            
+            {getAvailableBoxNumbers().length === 0 && (
+              <div className="text-center py-4 text-muted-foreground">
+                Todas as caixas (01-15) já foram adicionadas
+              </div>
+            )}
+
+            <div className="flex justify-end space-x-3 pt-4 border-t border-border/20">
+              <Button
+                type="button"
+                className="glass-button hover:bg-white/10 border border-border/30 px-6 py-2 rounded-lg text-white transition-all duration-200"
+                onClick={() => setBoxSelectionModalOpen(false)}
+                data-testid="button-close-box-selection-modal"
+              >
+                <X className="mr-2 h-4 w-4" />
+                Cancelar
               </Button>
             </div>
           </div>
