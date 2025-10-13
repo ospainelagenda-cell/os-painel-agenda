@@ -17,6 +17,7 @@ interface AddServiceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   teamId?: string;
+  scheduledDate?: string;
 }
 
 const addServiceOrderSchema = z.object({
@@ -37,7 +38,7 @@ const addServiceOrderSchema = z.object({
 
 type AddServiceOrderInput = z.infer<typeof addServiceOrderSchema>;
 
-export default function AddServiceModal({ open, onOpenChange, teamId }: AddServiceModalProps) {
+export default function AddServiceModal({ open, onOpenChange, teamId, scheduledDate }: AddServiceModalProps) {
   const [formData, setFormData] = useState<Partial<AddServiceOrderInput>>({
     code: "",
     type: "",
@@ -45,7 +46,7 @@ export default function AddServiceModal({ open, onOpenChange, teamId }: AddServi
     customerName: "",
     customerPhone: "",
     address: "",
-    scheduledDate: new Date().toISOString().split('T')[0], // Data atual
+    scheduledDate: scheduledDate || new Date().toISOString().split('T')[0], // Data do relatório ou data atual
     scheduledTime: "",
     alert: "",
     description: "",
@@ -113,7 +114,7 @@ export default function AddServiceModal({ open, onOpenChange, teamId }: AddServi
       customerName: "",
       customerPhone: "",
       address: "",
-      scheduledDate: new Date().toISOString().split('T')[0], // Data atual
+      scheduledDate: scheduledDate || new Date().toISOString().split('T')[0], // Data do relatório ou data atual
       scheduledTime: "",
       alert: "",
       description: "",
@@ -131,7 +132,17 @@ export default function AddServiceModal({ open, onOpenChange, teamId }: AddServi
         ...formData,
         teamId: teamId // Garantir que o teamId seja usado
       });
-      createServiceOrderMutation.mutate(validatedData);
+      
+      const dataToSend: any = { ...validatedData };
+      
+      if (selectedCityId) {
+        dataToSend.cityId = selectedCityId;
+      }
+      if (selectedNeighborhoodId) {
+        dataToSend.neighborhoodId = selectedNeighborhoodId;
+      }
+      
+      createServiceOrderMutation.mutate(dataToSend);
     } catch (error) {
       if (error instanceof z.ZodError) {
         const firstError = error.errors[0];

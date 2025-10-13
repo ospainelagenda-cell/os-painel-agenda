@@ -19,11 +19,12 @@ interface DynamicTeam {
   notes: string | null;
   isActive: boolean;
   fromReport: boolean; // Flag to indicate this is a dynamic team from report
+  reportServiceCodes?: string[]; // Service codes from the report
 }
 
 interface TeamsGridProps {
   onReallocate: (teamId: string) => void;
-  onAddServiceOrder?: (teamId: string) => void;
+  onAddServiceOrder?: (teamId: string, scheduledDate?: string) => void;
   onViewTeamServices?: (teamId: string, teamName: string) => void;
   onManageTechnicians?: (teamId: string) => void;
 }
@@ -248,6 +249,8 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
               return tech ? tech.name : '';
             }).filter((name: string) => name !== '').join(' E ');
             
+            const serviceCodes = box.serviceOrders ? box.serviceOrders.map((so: any) => so.code) : [];
+            
             const dynamicTeam: DynamicTeam = {
               id: `dynamic-${report.id}-${index}`,
               name: technicianNames,
@@ -255,7 +258,8 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
               technicianIds: box.technicianIds,
               notes: null, // Can be extended to include notes from boxes
               isActive: true,
-              fromReport: true
+              fromReport: true,
+              reportServiceCodes: serviceCodes
             };
             
             dynamicTeams.push(dynamicTeam);
@@ -326,6 +330,8 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
             
             const teamKey = `${technicianNames}-${box.boxNumber}`;
             if (!seenTeams.has(teamKey)) {
+              const serviceCodes = box.serviceOrders ? box.serviceOrders.map((so: any) => so.code) : [];
+              
               const dynamicTeam: DynamicTeam = {
                 id: `dynamic-${report.id}-${index}`,
                 name: technicianNames,
@@ -333,7 +339,8 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
                 technicianIds: box.technicianIds,
                 notes: null, 
                 isActive: true,
-                fromReport: true
+                fromReport: true,
+                reportServiceCodes: serviceCodes
               };
               
               dynamicTeams.push(dynamicTeam);
@@ -471,7 +478,7 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
     return names.length > 0 ? names.join(", ") : "Nenhum técnico atribuído";
   };
 
-  const getTeamServiceOrders = (teamId: string, technicianIds?: string[], boxNumber?: string) => {
+  const getTeamServiceOrders = (teamId: string, technicianIds?: string[], boxNumber?: string, reportServiceCodes?: string[]) => {
     // For dynamic teams, match by technician IDs and/or boxNumber; for static teams, match by team ID
     const matchesTeam = (order: ServiceOrder) => {
       if (teamId.startsWith('dynamic-') && technicianIds) {
@@ -528,8 +535,11 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
       return serviceOrders.filter(matchesTeam);
     }
     
+    // Filter by report service codes if provided (for dynamic teams from reports)
     return serviceOrders.filter(order => {
-      return matchesTeam(order) && order.scheduledDate === displayDate;
+      const matchesDate = order.scheduledDate === displayDate;
+      const matchesServiceCodes = !reportServiceCodes || reportServiceCodes.includes(order.code);
+      return matchesTeam(order) && matchesDate && matchesServiceCodes;
     });
   };
 
@@ -709,7 +719,7 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
           }
           
           return dynamicTeams.map((team) => {
-          const teamServiceOrders = getTeamServiceOrders(team.id, team.technicianIds, team.boxNumber);
+          const teamServiceOrders = getTeamServiceOrders(team.id, team.technicianIds, team.boxNumber, team.reportServiceCodes);
           const { completed, pending, rescheduled, adesivado, cancelled } = getStatusCounts(teamServiceOrders);
           const allServicesCompleted = teamServiceOrders.length > 0 && pending === 0 && rescheduled === 0 && adesivado === 0;
 
@@ -873,7 +883,7 @@ export default function TeamsGrid({ onReallocate, onAddServiceOrder, onViewTeamS
                 <div className="grid grid-cols-1 gap-2">
                   <Button
                     className="w-full glass-button py-2 rounded-lg text-xs text-white bg-primary/20 hover:bg-primary/30"
-                    onClick={() => onAddServiceOrder?.(team.id)}
+                    onClick={() => onAddServiceOrder?.(team.id, displayDate || undefined)}
                     data-testid={`button-add-service-${team.name.replace(/\s+/g, "-").toLowerCase()}`}
                   >
                     <Plus className="mr-1 h-3 w-3" />

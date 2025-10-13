@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [technicianServicesReallocationModalOpen, setTechnicianServicesReallocationModalOpen] = useState(false);
   const [selectedTeamId, setSelectedTeamId] = useState<string>("");
   const [selectedTeamIdForService, setSelectedTeamIdForService] = useState<string>("");
+  const [scheduledDateForService, setScheduledDateForService] = useState<string | undefined>();
   const [selectedTeamIdForServices, setSelectedTeamIdForServices] = useState<string>("");
   const [selectedTeamNameForServices, setSelectedTeamNameForServices] = useState<string>("");
   const [selectedTeamIdForTechnicians, setSelectedTeamIdForTechnicians] = useState<string>("");
@@ -79,8 +80,9 @@ export default function Dashboard() {
     setDayServicesModalOpen(true);
   };
 
-  const handleAddServiceOrder = (teamId: string) => {
+  const handleAddServiceOrder = (teamId: string, scheduledDate?: string) => {
     setSelectedTeamIdForService(teamId);
+    setScheduledDateForService(scheduledDate);
     setAddServiceModalOpen(true);
   };
 
@@ -333,6 +335,7 @@ export default function Dashboard() {
         open={addServiceModalOpen}
         onOpenChange={setAddServiceModalOpen}
         teamId={selectedTeamIdForService}
+        scheduledDate={scheduledDateForService}
       />
 
       <TeamServicesModal

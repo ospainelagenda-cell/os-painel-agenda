@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import type { ServiceOrder, Team } from "@shared/schema";
+import type { ServiceOrder, Team, Technician } from "@shared/schema";
 
 export default function AlertsSection() {
   // Set today's date as default
@@ -29,6 +29,10 @@ export default function AlertsSection() {
     queryKey: ["/api/teams"]
   });
 
+  const { data: technicians = [] } = useQuery<Technician[]>({
+    queryKey: ["/api/technicians"]
+  });
+
 
   const alertOrders = serviceOrders.filter(order => {
     const hasAlert = order.alert;
@@ -42,6 +46,18 @@ export default function AlertsSection() {
     if (!teamId) return "";
     const team = teams.find(t => t.id === teamId);
     return team?.name || "";
+  };
+
+  const getTechnicianNames = (teamId: string | null) => {
+    if (!teamId) return "";
+    const team = teams.find(t => t.id === teamId);
+    if (!team) return "";
+    
+    const teamTechnicians = technicians.filter(tech => 
+      team.technicianIds.includes(tech.id)
+    );
+    
+    return teamTechnicians.map(tech => tech.name).join(", ");
   };
 
   const getAlertIcon = (alert: string) => {
@@ -208,7 +224,7 @@ export default function AlertsSection() {
                 </div>
                 <p className="mb-1">{order.alert}</p>
                 <span className="text-xs opacity-75">
-                  {getTeamName(order.teamId)}
+                  {getTechnicianNames(order.teamId)}
                 </span>
               </div>
             );
